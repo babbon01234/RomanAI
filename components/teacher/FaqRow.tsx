@@ -38,7 +38,7 @@ export function FaqRow({
             name="question"
             defaultValue={faq.question}
             rows={3}
-            className="mt-1.5 w-full resize-y rounded-lg border border-parchment-line bg-parchment/40 px-3 py-2 text-[13px] leading-relaxed text-charcoal transition-colors focus:border-gold focus:bg-white focus:outline-none"
+            className="mt-1.5 w-full resize-y rounded-lg border border-parchment-line bg-parchment/40 px-3 py-2 text-[13px] leading-relaxed text-charcoal transition-colors focus:border-gold focus:bg-white"
           />
         </label>
 
@@ -50,7 +50,7 @@ export function FaqRow({
             name="answer"
             defaultValue={faq.answer}
             rows={3}
-            className="mt-1.5 w-full resize-y rounded-lg border border-parchment-line bg-parchment/40 px-3 py-2 text-[13px] leading-relaxed text-charcoal transition-colors focus:border-gold focus:bg-white focus:outline-none"
+            className="mt-1.5 w-full resize-y rounded-lg border border-parchment-line bg-parchment/40 px-3 py-2 text-[13px] leading-relaxed text-charcoal transition-colors focus:border-gold focus:bg-white"
           />
         </label>
       </div>

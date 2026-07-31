@@ -1,12 +1,12 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createLessonAction, type LessonFormState } from "@/app/actions/lessons";
 import { ACCEPT_ATTRIBUTE } from "@/lib/parsing";
 
 const FIELD =
-  "w-full rounded-lg border border-parchment-line bg-white/70 px-3.5 py-2.5 text-[14px] text-charcoal placeholder:text-charcoal-muted/50 transition-colors duration-150 focus:border-gold focus:outline-none";
+  "w-full rounded-lg border border-parchment-line bg-white/70 px-3.5 py-2.5 text-[14px] text-charcoal placeholder:text-charcoal-muted/50 transition-colors duration-150 focus:border-gold";
 
 export function NewLessonForm() {
   const [state, action] = useActionState<LessonFormState, FormData>(
@@ -14,7 +14,6 @@ export function NewLessonForm() {
     {},
   );
   const [names, setNames] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <form action={action} className="mt-8 space-y-6">
@@ -38,9 +37,17 @@ export function NewLessonForm() {
         />
       </Field>
 
-      <Field label="Files" hint="PDF, DOCX, or PPTX. You can add more than one.">
+      <div>
+        <span className="text-[13px] font-medium text-ink">Files</span>
+        <span className="mt-0.5 block text-[12px] text-charcoal-muted">
+          PDF, DOCX, or PPTX. You can add more than one.
+        </span>
+
+        {/* The input stays the only tab stop and keeps the native file
+            picker; the label is what's actually visible, and it shows the
+            focus ring on the input's behalf via peer-focus-visible. */}
         <input
-          ref={inputRef}
+          id="lesson-files"
           type="file"
           name="files"
           multiple
@@ -49,13 +56,12 @@ export function NewLessonForm() {
           onChange={(e) =>
             setNames(Array.from(e.target.files ?? []).map((f) => f.name))
           }
-          className="sr-only"
+          className="peer sr-only"
         />
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="w-full cursor-pointer rounded-lg border border-dashed border-parchment-line bg-white/40 px-4 py-7 text-center transition-colors duration-150 hover:border-gold hover:bg-gold-wash/40"
+        <label
+          htmlFor="lesson-files"
+          className="mt-2.5 block w-full cursor-pointer rounded-lg border border-dashed border-parchment-line bg-white/40 px-4 py-7 text-center transition-colors duration-150 hover:border-gold hover:bg-gold-wash/40 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-gold-deep"
         >
           <span className="block text-[13px] font-medium text-ink">
             {names.length ? "Choose different files" : "Choose files"}
@@ -65,7 +71,7 @@ export function NewLessonForm() {
               ? `${names.length} selected`
               : "Slides, a handout, an assignment sheet"}
           </span>
-        </button>
+        </label>
 
         {names.length > 0 && (
           <ul className="mt-3 space-y-1.5">
@@ -80,7 +86,7 @@ export function NewLessonForm() {
             ))}
           </ul>
         )}
-      </Field>
+      </div>
 
       {state.error && (
         <p

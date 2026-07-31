@@ -245,7 +245,7 @@ function Composer({
           }}
           placeholder="Ask about this lesson…"
           aria-label="Ask about this lesson"
-          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-lg border border-parchment-line bg-parchment/50 px-3.5 py-2.5 text-[14px] leading-relaxed text-charcoal placeholder:text-charcoal-muted/55 transition-colors duration-150 focus:border-gold focus:bg-white focus:outline-none"
+          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-lg border border-parchment-line bg-parchment/50 px-3.5 py-2.5 text-[14px] leading-relaxed text-charcoal placeholder:text-charcoal-muted/55 transition-colors duration-150 focus:border-gold focus:bg-white"
         />
         <button
           type="submit"
