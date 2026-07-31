@@ -9,7 +9,7 @@ from. Scope and constraints are in [CLAUDE.md](CLAUDE.md),
 
 ```sh
 npm install
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:5880
 ```
 
 The SQLite database and uploaded files are created on first run under `data/`,
