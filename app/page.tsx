@@ -1,65 +1,120 @@
-import Image from "next/image";
+import { continueAsStudent, continueAsTeacher } from "@/app/actions/session";
 
-export default function Home() {
+export default function LandingPage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="flex flex-1 items-center justify-center px-5 py-14 sm:py-20">
+      <div className="w-full max-w-3xl">
+        <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-charcoal-muted">
+          Office Hours
+        </p>
+
+        <h1 className="mt-4 max-w-xl text-4xl leading-[1.08] tracking-[-0.015em] sm:text-5xl">
+          Ask about the lesson.
+          <br />
+          Get the source with it.
+        </h1>
+
+        <p className="mt-5 max-w-md text-[15px] leading-relaxed text-charcoal-muted">
+          Every answer comes from your teacher&rsquo;s own materials, with the
+          slide or page it came from.
+        </p>
+
+        <div className="mt-11 grid gap-4 sm:grid-cols-2">
+          <RoleCard
+            action={continueAsTeacher}
+            variant="teacher"
+            label="I’m teaching"
+            blurb="Add lessons, see what students are asking, save the answers worth keeping."
+          />
+          <RoleCard
+            action={continueAsStudent}
+            variant="student"
+            label="I’m a student"
+            blurb="Pick a lesson and ask. Every answer shows where it came from."
+          />
+        </div>
+
+        <p className="mt-10 text-xs text-charcoal-muted/80">
+          Demo build. No passwords, no real student data.
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function RoleCard({
+  action,
+  variant,
+  label,
+  blurb,
+}: {
+  action: () => Promise<void>;
+  variant: "teacher" | "student";
+  label: string;
+  blurb: string;
+}) {
+  const teacher = variant === "teacher";
+
+  return (
+    <form action={action} className="contents">
+      <button
+        type="submit"
+        className={
+          "group relative flex min-h-[172px] cursor-pointer flex-col items-start rounded-xl p-6 text-left transition duration-200 ease-[var(--ease-quiet)] hover:-translate-y-0.5 active:translate-y-0 " +
+          (teacher
+            ? "bg-ink text-parchment shadow-[0_10px_24px_-16px_rgba(27,42,74,.65)] hover:shadow-[0_16px_32px_-16px_rgba(27,42,74,.7)]"
+            : "border border-parchment-line bg-white/70 shadow-[0_10px_24px_-20px_rgba(27,42,74,.5)] hover:border-gold hover:shadow-[0_16px_30px_-20px_rgba(27,42,74,.5)]")
+        }
+      >
+        {/* Quiet motif: stacked index cards for the teacher, ruled paper for
+            the student — enough to tell the two worlds apart at a glance. */}
+        <span
+          aria-hidden
+          className={
+            "pointer-events-none absolute right-6 top-6 h-9 w-9 rounded-[3px] " +
+            (teacher
+              ? "border border-parchment/25 bg-parchment/10 shadow-[5px_-5px_0_-1px_var(--color-ink),5px_-5px_0_rgba(250,246,237,.22)]"
+              : "border border-parchment-line bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_5px,var(--color-parchment-line)_5px,var(--color-parchment-line)_6px)]")
+          }
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <span
+          className={
+            "mt-auto font-display text-2xl " +
+            (teacher ? "text-parchment" : "text-ink")
+          }
+        >
+          {label}
+        </span>
+
+        <span
+          className={
+            "mt-2 max-w-[26ch] text-[13px] leading-relaxed " +
+            (teacher ? "text-parchment/70" : "text-charcoal-muted")
+          }
+        >
+          {blurb}
+        </span>
+
+        <span
+          aria-hidden
+          className={
+            "mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition-[gap] duration-200 group-hover:gap-2.5 " +
+            (teacher ? "text-gold" : "text-gold-deep")
+          }
+        >
+          Continue
+          <svg width="14" height="8" viewBox="0 0 14 8" fill="none">
+            <path
+              d="M0 4h12M9 1l3 3-3 3"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </svg>
+        </span>
+      </button>
+    </form>
   );
 }
