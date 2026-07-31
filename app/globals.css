@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Office Hours — design tokens (DESIGN_GUIDE.md)
+
+   Ink Navy is the *structural* color: nav, headers, teacher chrome. Parchment
+   is surface only. Gold is reserved for CTAs and active states so it stays a
+   signal rather than a decoration. Keeping navy dominant is what pulls this
+   away from the cream/serif/terracotta look the guide warns against.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-ink: #1b2a4a;
+  --color-ink-700: #2f4470;
+  --color-ink-300: #8895b0;
+
+  --color-parchment: #faf6ed;
+  --color-parchment-deep: #f2ebdc;
+  --color-parchment-line: #e6dcc7;
+
+  --color-gold: #d4a657;
+  --color-gold-deep: #b8873a;
+  --color-gold-wash: #f7ecd6;
+
+  --color-sage: #6b8f71;
+  --color-sage-wash: #e7efe6;
+
+  --color-charcoal: #2b2b2b;
+  --color-charcoal-muted: #6a6660;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-annot: var(--font-caveat), cursive;
+
+  /* Motion: one shared vocabulary so the margin note is the only thing that
+     ever feels "authored" and everything else stays quiet. */
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-quiet: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-parchment);
+    color: var(--color-charcoal);
+    font-family: var(--font-body);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+  }
+
+  /* Quality floor: focus must always be visible, never removed. */
+  :focus-visible {
+    outline: 2px solid var(--color-gold-deep);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-gold-wash);
+    color: var(--color-ink);
+  }
+}
+
+/* Ruled-notebook surface for the student chat column. */
+@utility surface-ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 31px,
+    var(--color-parchment-line) 31px,
+    var(--color-parchment-line) 32px
+  );
+  background-position: 0 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
