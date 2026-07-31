@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
-import { answerQuestion } from "@/lib/answer";
-import { getLesson, listFiles, logMessage } from "@/lib/db/queries";
+import { activeProvider, answerQuestion } from "@/lib/answer";
+import {
+  getLesson,
+  listFaqs,
+  listFiles,
+  logMessage,
+} from "@/lib/db/queries";
 import { selectChunks } from "@/lib/retrieval/chunks";
+import { matchFaq } from "@/lib/retrieval/faq-match";
 import { getRole, getStudentName } from "@/lib/session";
 import type { Citation } from "@/lib/types";
 
@@ -41,6 +47,29 @@ export async function POST(request: Request) {
   const lesson = getLesson(lessonId);
   if (!lesson) {
     return NextResponse.json({ error: "No such lesson." }, { status: 404 });
+  }
+
+  // FAQ first. A teacher-approved answer beats a generated one, and it costs
+  // nothing — so this runs before any retrieval or model call.
+  const faq = matchFaq(question, listFaqs(lessonId));
+  if (faq) {
+    const id = logMessage({
+      lessonId,
+      studentName,
+      question,
+      answer: faq.answer,
+      citations: [],
+      source: "faq",
+    });
+
+    return NextResponse.json({
+      id,
+      answer: faq.answer,
+      citations: [],
+      found: true,
+      source: "faq",
+      provider: activeProvider(),
+    } satisfies ChatResponse);
   }
 
   const { chunks } = selectChunks(lessonId, question);

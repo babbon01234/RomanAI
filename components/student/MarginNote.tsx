@@ -18,20 +18,27 @@ function tiltFor(seed: string, index: number): string {
 export function MarginNote({
   citations,
   seed,
+  savedAnswer = false,
 }: {
   citations: Citation[];
   seed: string;
+  /** A teacher-approved FAQ answer — its source is the teacher, not a page. */
+  savedAnswer?: boolean;
 }) {
-  if (citations.length === 0) return <div aria-hidden />;
+  const notes: { label: string; sub?: string }[] = savedAnswer
+    ? [{ label: "Saved answer", sub: "From your teacher" }]
+    : citations.map((c) => ({ label: c.locator, sub: c.filename }));
+
+  if (notes.length === 0) return <div aria-hidden />;
 
   return (
     <aside
       aria-label="Where this answer came from"
       className="mt-2 flex flex-col items-start gap-3 md:mt-0 md:pt-1"
     >
-      {citations.map((citation, i) => (
+      {notes.map((note, i) => (
         <div
-          key={`${citation.locator}-${i}`}
+          key={`${note.label}-${i}`}
           style={
             {
               "--tilt": tiltFor(seed, i),
@@ -50,7 +57,7 @@ export function MarginNote({
           />
 
           <p className="font-annot text-[19px] leading-none text-ink">
-            {citation.locator}
+            {note.label}
           </p>
 
           {/* Hand-drawn underline rather than a border — a ruler line here
@@ -70,9 +77,9 @@ export function MarginNote({
             />
           </svg>
 
-          {citation.filename && (
+          {note.sub && (
             <p className="mt-1.5 max-w-[11rem] truncate text-[10px] uppercase tracking-[0.12em] text-charcoal-muted/70">
-              {citation.filename}
+              {note.sub}
             </p>
           )}
         </div>

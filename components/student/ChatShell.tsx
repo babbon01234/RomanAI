@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { FaqChips } from "./FaqChips";
 import { LessonTabs } from "./LessonTabs";
 import { MarginNote } from "./MarginNote";
 import type { ChatResponse } from "@/app/api/chat/route";
-import type { Citation, LessonSummary } from "@/lib/types";
+import type { Citation, Faq, LessonSummary } from "@/lib/types";
 
 interface Exchange {
   key: string;
@@ -12,14 +13,18 @@ interface Exchange {
   answer?: string;
   citations: Citation[];
   found?: boolean;
+  /** "faq" when a teacher-approved answer matched — no model call was made. */
+  source?: "faq" | "model";
   error?: string;
 }
 
 export function ChatShell({
   lessons,
+  faqs,
   rehearsal,
 }: {
   lessons: LessonSummary[];
+  faqs: Faq[];
   rehearsal: boolean;
 }) {
   const askable = lessons.filter((l) => l.chunk_count > 0);
@@ -32,6 +37,7 @@ export function ChatShell({
   const endRef = useRef<HTMLDivElement>(null);
 
   const exchanges = lessonId ? (byLesson[lessonId] ?? []) : [];
+  const lessonFaqs = faqs.filter((f) => f.lesson_id === lessonId);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -71,6 +77,7 @@ export function ChatShell({
           answer: data.answer,
           citations: data.citations,
           found: data.found,
+          source: data.source,
         });
     } catch {
       patch({ error: "Couldn’t reach the server. Try again." });
@@ -144,6 +151,12 @@ export function ChatShell({
           <div ref={endRef} />
         </div>
 
+        <FaqChips
+          faqs={lessonFaqs}
+          onPick={ask}
+          disabled={sending || !lessonId}
+        />
+
         <Composer
           value={draft}
           onChange={setDraft}
@@ -190,7 +203,11 @@ function ExchangeRows({ exchange }: { exchange: Exchange }) {
       </div>
 
       <div className="md:col-start-2">
-        <MarginNote citations={exchange.citations} seed={exchange.key} />
+        <MarginNote
+          citations={exchange.citations}
+          seed={exchange.key}
+          savedAnswer={exchange.source === "faq"}
+        />
       </div>
     </Fragment>
   );

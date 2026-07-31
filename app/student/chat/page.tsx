@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/session";
 import { ChatShell } from "@/components/student/ChatShell";
 import { activeProvider } from "@/lib/answer";
-import { listLessons } from "@/lib/db/queries";
+import { listAllFaqs, listLessons } from "@/lib/db/queries";
 import { getRole, getStudentName } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export default async function StudentChatPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-12 pt-7">
         <ChatShell
           lessons={listLessons()}
+          faqs={listAllFaqs()}
           rehearsal={activeProvider() === "rehearsal"}
         />
       </main>
