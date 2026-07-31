@@ -39,7 +39,9 @@ export function listLessons(): LessonSummary[] {
          FROM lessons l
          LEFT JOIN files f ON f.lesson_id = l.id
         GROUP BY l.id
-        ORDER BY l.created_at DESC`,
+        -- created_at is second-granularity, so rowid breaks ties from a
+        -- burst of uploads and keeps the order stable across renders.
+        ORDER BY l.created_at DESC, l.rowid DESC`,
     )
     .all() as LessonSummary[];
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LessonGrid } from "@/components/teacher/LessonGrid";
 import { listLessons } from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +34,10 @@ export default function TeacherLessonsPage() {
           </p>
         </div>
       ) : (
-        <p className="mt-8 text-[13px] text-charcoal-muted">
-          {lessons.length} lesson{lessons.length === 1 ? "" : "s"}. Cards land in
-          the next step.
-        </p>
+        <LessonGrid
+          key={lessons.map((l) => l.id).join()}
+          initial={lessons}
+        />
       )}
     </>
   );
