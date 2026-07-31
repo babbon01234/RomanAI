@@ -71,7 +71,8 @@
   }
 }
 
-/* Ruled-notebook surface for the student chat column. */
+/* Ruled-notebook surface. The 32px repeat matches the answer text's
+   line-height exactly, so the writing sits on the rules instead of near them. */
 @utility surface-ruled {
   background-image: repeating-linear-gradient(
     to bottom,
@@ -80,7 +81,65 @@
     var(--color-parchment-line) 31px,
     var(--color-parchment-line) 32px
   );
-  background-position: 0 8px;
+  background-position: 0 var(--rule-offset, 0px);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion. Authored for this product, not lifted from a preset library.
+
+   The metaphor throughout is a teacher annotating by hand: ink settling into
+   paper, a note set down at an angle. Everything decelerates to a stop —
+   nothing springs back, because a pen doesn't.
+--------------------------------------------------------------------------- */
+
+/* ink-rise — any message arriving. Deliberately unremarkable. */
+@keyframes ink-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* margin-scrawl, beat 2 — the leader line drawn from the answer to the margin. */
+@keyframes leader-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* margin-scrawl, beat 3 — the note itself, arriving from off to the right and
+   rotating down to its resting tilt. --tilt varies per note so a column of
+   them looks handwritten rather than stamped. */
+@keyframes margin-scrawl {
+  from {
+    opacity: 0;
+    transform: translateX(14px) rotate(-4.5deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) rotate(var(--tilt, -1.5deg));
+  }
+}
+
+/* nib-tap — waiting for an answer. A pen tapping, not a spinner. */
+@keyframes nib-tap {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 0.75;
+    transform: translateY(-2px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -90,6 +149,11 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* Delays must go too. The choreographed beats use fill-mode: both, so a
+       surviving delay would hold elements at their opacity-0 start frame —
+       hiding the citation from exactly the people who opted out of motion. */
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
 }

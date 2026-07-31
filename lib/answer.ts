@@ -174,10 +174,9 @@ function rehearse({
   }
 
   // Quote the material rather than paraphrase it — an extract is honest about
-  // what this mode is, where invented prose would not be.
-  const text = ranked
-    .map(({ chunk }) => chunk.content.replace(/\n+/g, " ").trim())
-    .join("\n\n");
+  // what this mode is, where invented prose would not be. Line breaks survive
+  // so a slide's heading stays a heading instead of running into the sentence.
+  const text = ranked.map(({ chunk }) => chunk.content.trim()).join("\n\n");
 
   return {
     text,
