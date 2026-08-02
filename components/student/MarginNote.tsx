@@ -19,11 +19,14 @@ export function MarginNote({
   citations,
   seed,
   savedAnswer = false,
+  animate = true,
 }: {
   citations: Citation[];
   seed: string;
   /** A teacher-approved FAQ answer — its source is the teacher, not a page. */
   savedAnswer?: boolean;
+  /** False for notes restored from the log — they were already scrawled. */
+  animate?: boolean;
 }) {
   const notes: { label: string; sub?: string }[] = savedAnswer
     ? [{ label: "Saved answer", sub: "From your teacher" }]
@@ -40,20 +43,29 @@ export function MarginNote({
         <div
           key={`${note.label}-${i}`}
           style={
-            {
-              "--tilt": tiltFor(seed, i),
-              // Beat 3 of margin-scrawl, staggered per note.
-              animationDelay: `${340 + i * 90}ms`,
-            } as React.CSSProperties
+            animate
+              ? // Beat 3 of margin-scrawl, staggered per note.
+                ({
+                  "--tilt": tiltFor(seed, i),
+                  animationDelay: `${340 + i * 90}ms`,
+                } as React.CSSProperties)
+              : // Restored: already at rest, so apply the tilt directly.
+                { transform: `rotate(${tiltFor(seed, i)})` }
           }
-          className="relative animate-[margin-scrawl_.52s_var(--ease-settle)_both]"
+          className={
+            "relative " +
+            (animate ? "animate-[margin-scrawl_.52s_var(--ease-settle)_both]" : "")
+          }
         >
           {/* Beat 2: the leader line, drawn from the answer across the gutter.
               Desktop only — on a phone the note sits directly beneath. */}
           <span
             aria-hidden
-            style={{ animationDelay: `${200 + i * 90}ms` }}
-            className="absolute right-full top-[13px] hidden h-px w-7 origin-right bg-gold/55 animate-[leader-draw_.24s_var(--ease-quiet)_both] md:block"
+            style={animate ? { animationDelay: `${200 + i * 90}ms` } : undefined}
+            className={
+              "absolute right-full top-[13px] hidden h-px w-7 origin-right bg-gold/55 md:block " +
+              (animate ? "animate-[leader-draw_.24s_var(--ease-quiet)_both]" : "")
+            }
           />
 
           <p className="font-annot text-[19px] leading-none text-ink">

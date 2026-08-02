@@ -1,8 +1,11 @@
 "use server";
 
+import fs from "node:fs/promises";
+import path from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createLesson } from "@/lib/db/queries";
+import { UPLOAD_DIR } from "@/lib/db";
+import { createLesson, deleteLesson, listFiles } from "@/lib/db/queries";
 import { processPending, stageUpload } from "@/lib/processing";
 import { getRole } from "@/lib/session";
 
@@ -43,4 +46,32 @@ export async function createLessonAction(
 
   revalidatePath("/teacher");
   redirect("/teacher");
+}
+
+/**
+ * Removes the lesson, everything cascading from it, and the uploaded files on
+ * disk. Destructive and not undoable — the UI asks first.
+ */
+export async function deleteLessonAction(formData: FormData) {
+  if ((await getRole()) !== "teacher") throw new Error("Teachers only.");
+
+  const lessonId = String(formData.get("lessonId") ?? "");
+  if (!lessonId) return;
+
+  // Read the file list before the cascade removes the rows.
+  const files = listFiles(lessonId);
+  deleteLesson(lessonId);
+
+  for (const file of files) {
+    const onDisk = path.join(
+      UPLOAD_DIR,
+      `${file.id}${path.extname(file.filename)}`,
+    );
+    // A missing upload shouldn't fail the delete the teacher already asked for.
+    await fs.rm(onDisk, { force: true }).catch(() => {});
+  }
+
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/questions");
+  revalidatePath("/teacher/faq");
 }

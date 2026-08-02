@@ -10,7 +10,12 @@ from. Scope and constraints are in [CLAUDE.md](CLAUDE.md),
 ```sh
 npm install
 npm run dev          # http://localhost:5880
+npm test             # 28 unit tests, ~1s, no browser or network
+npm run test:e2e     # the full loop in a real browser (needs the dev server)
 ```
+
+See [tests/README.md](tests/README.md) — every test there exists because
+something actually broke during the build.
 
 The SQLite database and uploaded files are created on first run under `data/`,
 which is gitignored. Delete that folder to start over.
@@ -73,6 +78,11 @@ components/{student,teacher}/
 - **Parsing is synchronous, after the redirect.** The teacher lands on the
   dashboard and watches the card go Processing → Ready. A file that can't be
   read is recorded as failed with its reason and doesn't take down the batch.
+- **Deleting a lesson is final.** It takes the lesson's files, passages,
+  questions, and FAQs with it, plus the uploads on disk. The card asks first.
+- **Students see their own history.** The chat rehydrates from the question
+  log, so a refresh doesn't lose the conversation — and restored answers don't
+  replay the margin-scrawl, which is reserved for an answer actually arriving.
 - **Motion is one moment.** The margin citation is the only place with real
   animation, per DESIGN_GUIDE. Everything else is hover and focus states.
   All of it collapses to final-state-immediately under `prefers-reduced-motion`.

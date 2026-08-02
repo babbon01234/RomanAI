@@ -68,6 +68,8 @@ export interface LessonSummary extends Lesson {
   chunk_count: number;
   /** Rolled up from this lesson's files: failed > processing > ready. */
   status: FileStatus;
+  /** Why the first failing file failed, if any did. */
+  error: string | null;
 }
 
 export const STUDENT_NAMES = ["Alex", "Jordan", "Sam", "Priya", "Marcus"];

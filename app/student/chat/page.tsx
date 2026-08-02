@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/session";
-import { ChatShell } from "@/components/student/ChatShell";
+import { ChatShell, type Exchange } from "@/components/student/ChatShell";
 import { activeProvider } from "@/lib/answer";
-import { listAllFaqs, listLessons } from "@/lib/db/queries";
+import {
+  listAllFaqs,
+  listLessons,
+  listMessagesForStudent,
+} from "@/lib/db/queries";
 import { getRole, getStudentName } from "@/lib/session";
+import type { Citation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +17,30 @@ export default async function StudentChatPage() {
 
   const name = await getStudentName();
   if (!name) redirect("/student");
+
+  const lessons = listLessons();
+
+  // Rehydrate this student's own history from the question log, so a refresh
+  // (or picking the phone back up) doesn't lose the conversation.
+  const history: Record<string, Exchange[]> = {};
+  for (const lesson of lessons) {
+    if (lesson.chunk_count === 0) continue;
+
+    history[lesson.id] = listMessagesForStudent(lesson.id, name).map(
+      (message) => {
+        const citations = JSON.parse(message.citations_json) as Citation[];
+        return {
+          key: message.id,
+          question: message.question,
+          answer: message.answer,
+          citations,
+          found: message.source === "faq" || citations.length > 0,
+          source: message.source,
+          restored: true,
+        };
+      },
+    );
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -34,8 +63,9 @@ export default async function StudentChatPage() {
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-12 pt-7">
         <ChatShell
-          lessons={listLessons()}
+          lessons={lessons}
           faqs={listAllFaqs()}
+          history={history}
           rehearsal={activeProvider() === "rehearsal"}
         />
       </main>

@@ -7,7 +7,7 @@ import { MarginNote } from "./MarginNote";
 import type { ChatResponse } from "@/app/api/chat/route";
 import type { Citation, Faq, LessonSummary } from "@/lib/types";
 
-interface Exchange {
+export interface Exchange {
   key: string;
   question: string;
   answer?: string;
@@ -16,22 +16,31 @@ interface Exchange {
   /** "faq" when a teacher-approved answer matched — no model call was made. */
   source?: "faq" | "model";
   error?: string;
+  /**
+   * Rehydrated from the log rather than just answered. The margin-scrawl is
+   * the signature moment for an answer arriving; replaying it for history
+   * every time the page loads would spend it on nothing.
+   */
+  restored?: boolean;
 }
 
 export function ChatShell({
   lessons,
   faqs,
+  history,
   rehearsal,
 }: {
   lessons: LessonSummary[];
   faqs: Faq[];
+  /** This student's prior exchanges, keyed by lesson, from the question log. */
+  history: Record<string, Exchange[]>;
   rehearsal: boolean;
 }) {
   const askable = lessons.filter((l) => l.chunk_count > 0);
   const [lessonId, setLessonId] = useState<string | null>(
     askable[0]?.id ?? null,
   );
-  const [byLesson, setByLesson] = useState<Record<string, Exchange[]>>({});
+  const [byLesson, setByLesson] = useState<Record<string, Exchange[]>>(history);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -173,9 +182,13 @@ export function ChatShell({
  * slot. Alignment falls out of the grid — nothing is measured or positioned.
  */
 function ExchangeRows({ exchange }: { exchange: Exchange }) {
+  const rise = exchange.restored
+    ? ""
+    : "animate-[ink-rise_.26s_var(--ease-quiet)_both]";
+
   return (
     <Fragment>
-      <div className="animate-[ink-rise_.26s_var(--ease-quiet)_both] md:col-start-1">
+      <div className={`${rise} md:col-start-1`}>
         <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-ink px-4 py-2.5 text-[14px] leading-relaxed text-parchment">
           {exchange.question}
         </p>
@@ -183,8 +196,8 @@ function ExchangeRows({ exchange }: { exchange: Exchange }) {
       <div aria-hidden className="hidden md:col-start-2 md:block" />
 
       <div
-        style={{ animationDelay: "60ms" }}
-        className="animate-[ink-rise_.26s_var(--ease-quiet)_both] md:col-start-1"
+        style={exchange.restored ? undefined : { animationDelay: "60ms" }}
+        className={`${rise} md:col-start-1`}
       >
         {exchange.error ? (
           <p className="text-[14px] leading-8 text-red-700">{exchange.error}</p>
@@ -207,6 +220,7 @@ function ExchangeRows({ exchange }: { exchange: Exchange }) {
           citations={exchange.citations}
           seed={exchange.key}
           savedAnswer={exchange.source === "faq"}
+          animate={!exchange.restored}
         />
       </div>
     </Fragment>

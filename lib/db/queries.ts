@@ -35,7 +35,10 @@ export function listLessons(): LessonSummary[] {
                 WHEN SUM(f.status = 'failed')     > 0 THEN 'failed'
                 WHEN SUM(f.status = 'processing') > 0 THEN 'processing'
                 ELSE 'ready'
-              END AS status
+              END AS status,
+              -- First failure reason, so the teacher sees why rather than
+              -- just that something went wrong.
+              MIN(CASE WHEN f.status = 'failed' THEN f.error END) AS error
          FROM lessons l
          LEFT JOIN files f ON f.lesson_id = l.id
         GROUP BY l.id
@@ -48,6 +51,11 @@ export function listLessons(): LessonSummary[] {
 
 export function getLesson(id: string): LessonSummary | undefined {
   return listLessons().find((l) => l.id === id);
+}
+
+/** Everything tied to the lesson goes with it — see schema.sql's cascades. */
+export function deleteLesson(lessonId: string): void {
+  db.prepare("DELETE FROM lessons WHERE id = ?").run(lessonId);
 }
 
 export function listFiles(lessonId: string): LessonFile[] {
@@ -186,6 +194,26 @@ export function listMessages(limit = 100): MessageWithLesson[] {
         LIMIT ?`,
     )
     .all(limit) as MessageWithLesson[];
+}
+
+/** A student's own history for one lesson, oldest first, for rehydrating chat. */
+export function listMessagesForStudent(
+  lessonId: string,
+  studentName: string,
+  limit = 50,
+): Message[] {
+  // Take the most recent N, then flip in JS. Sorting ascending inside a
+  // subquery needs rowid, which `SELECT *` doesn't carry out of one.
+  const recent = db
+    .prepare(
+      `SELECT * FROM messages
+        WHERE lesson_id = ? AND student_name = ?
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT ?`,
+    )
+    .all(lessonId, studentName, limit) as Message[];
+
+  return recent.reverse();
 }
 
 export function getMessage(id: string): MessageWithLesson | undefined {

@@ -12,10 +12,13 @@ const globalForDb = globalThis as unknown as { db?: Database.Database };
 export const DATA_DIR = path.join(process.cwd(), "data");
 export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
+/** Overridable so tests can run against a throwaway database. */
+const DB_FILE = process.env.OFFICE_HOURS_DB ?? path.join(DATA_DIR, "app.db");
+
 function connect(): Database.Database {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-  const db = new Database(path.join(DATA_DIR, "app.db"));
+  const db = new Database(DB_FILE);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
