@@ -9,7 +9,8 @@ import {
 import { selectChunks } from "@/lib/retrieval/chunks";
 import { matchFaq } from "@/lib/retrieval/faq-match";
 import { getRole, getStudentName } from "@/lib/session";
-import type { Citation } from "@/lib/types";
+import { REDIRECTS, triageQuestion, type HumanReason } from "@/lib/triage";
+import type { Citation, Outcome } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,9 @@ export interface ChatResponse {
   citations: Citation[];
   found: boolean;
   source: "faq" | "model";
+  /** "needs_human" means nothing was generated — the student was sent on. */
+  outcome: Outcome;
+  humanReason: HumanReason | null;
   provider: "anthropic" | "rehearsal";
 }
 
@@ -49,8 +53,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No such lesson." }, { status: 404 });
   }
 
-  // FAQ first. A teacher-approved answer beats a generated one, and it costs
-  // nothing — so this runs before any retrieval or model call.
+  // FAQ first, and before triage too. If a teacher has written an answer to
+  // "can I get an extension", their words outrank our redirect — they've
+  // already made the call this would otherwise hand back to them.
   const faq = matchFaq(question, listFaqs(lessonId));
   if (faq) {
     const id = logMessage({
@@ -68,8 +73,30 @@ export async function POST(request: Request) {
       citations: [],
       found: true,
       source: "faq",
+      outcome: "answered",
+      humanReason: null,
       provider: activeProvider(),
     } satisfies ChatResponse);
+  }
+
+  /**
+   * Classify before answering. This pass reads the student's wording only —
+   * it doesn't need the lesson, doesn't call the model, and works with no API
+   * key. When it fires we return without generating anything at all, which is
+   * the point: there is no answer to be tempted into guessing at.
+   */
+  const triage = triageQuestion(question);
+  if (triage.needsHuman && triage.reason) {
+    // A grade question on a Canvas assignment has somewhere better to go than
+    // the teacher's inbox: Phase 7's explanation reads out their actual rubric
+    // marks. Without this the app contradicts itself — typing "why did I lose
+    // points" is refused while the button right below answers it.
+    const extra =
+      triage.reason === "grade" && lesson.canvas_kind === "assignment"
+        ? " If you just want to know where the points went, the “Why did I lose points on this?” button below shows your teacher's own rubric notes."
+        : "";
+
+    return handOff(lessonId, studentName, question, triage.reason, undefined, extra);
   }
 
   const { chunks } = selectChunks(lessonId, question);
@@ -91,6 +118,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // The model's own read, for what wording alone couldn't settle. Its answer
+  // text is discarded rather than shown — if this is a question for a person,
+  // whatever it wrote isn't ours to pass on.
+  if (answer.needsHuman) {
+    return handOff(lessonId, studentName, question, "subjective");
+  }
+
+  // Material that doesn't cover the question is also a question for a person.
+  // The student sees the same wording as before; what changed is that the
+  // teacher now sees it in their log as something waiting on them.
+  if (!answer.found) {
+    return handOff(lessonId, studentName, question, "not-covered", answer.provider);
+  }
+
   // Log every exchange — this is the teacher's window into what's being asked.
   const id = logMessage({
     lessonId,
@@ -99,6 +140,7 @@ export async function POST(request: Request) {
     answer: answer.text,
     citations: answer.citations,
     source: "model",
+    outcome: "answered",
   });
 
   return NextResponse.json({
@@ -107,6 +149,46 @@ export async function POST(request: Request) {
     citations: answer.citations,
     found: answer.found,
     source: "model",
+    outcome: "answered",
+    humanReason: null,
     provider: answer.provider,
+  } satisfies ChatResponse);
+}
+
+/**
+ * Hand the question back. Nothing is generated, nothing is cited, and the log
+ * entry carries the reason so the teacher can scan for what needs them.
+ */
+function handOff(
+  lessonId: string,
+  studentName: string,
+  question: string,
+  reason: HumanReason,
+  provider = activeProvider(),
+  /** Appended to the standard redirect when there's somewhere else to point. */
+  extra = "",
+): NextResponse {
+  const answer = REDIRECTS[reason] + extra;
+
+  const id = logMessage({
+    lessonId,
+    studentName,
+    question,
+    answer,
+    citations: [],
+    source: "model",
+    outcome: "needs_human",
+    humanReason: reason,
+  });
+
+  return NextResponse.json({
+    id,
+    answer,
+    citations: [],
+    found: false,
+    source: "model",
+    outcome: "needs_human",
+    humanReason: reason,
+    provider,
   } satisfies ChatResponse);
 }

@@ -108,12 +108,12 @@ test("deleting a lesson takes its chunks, files, messages and FAQs with it", () 
     source: "model",
   });
 
-  assert.equal(q.getChunksForLesson(id).length, 1);
+  assert.equal(q.listChunksForReview(id).length, 1);
 
   q.deleteLesson(id);
 
   assert.equal(q.getLesson(id), undefined);
-  assert.equal(q.getChunksForLesson(id).length, 0);
+  assert.equal(q.listChunksForReview(id).length, 0);
   assert.equal(q.listFiles(id).length, 0);
   assert.equal(q.listFaqs(id).length, 0);
   assert.equal(q.listMessagesForStudent(id, "Alex").length, 0);

@@ -1,4 +1,4 @@
-import { getChunksForLesson } from "@/lib/db/queries";
+import { getApprovedChunks } from "@/lib/db/queries";
 import { overlap, terms } from "./terms";
 import type { Chunk } from "@/lib/types";
 
@@ -15,8 +15,14 @@ export interface Retrieval {
   strategy: "full" | "ranked";
 }
 
+/**
+ * Approved chunks only, and that is the whole of the rule — pending and
+ * rejected content never enters the candidate set, so it cannot be ranked,
+ * cannot enter a prompt, and cannot be cited. Same call for manually uploaded
+ * and Canvas-synced lessons; neither has a path around it.
+ */
 export function selectChunks(lessonId: string, question: string): Retrieval {
-  const all = getChunksForLesson(lessonId);
+  const all = getApprovedChunks(lessonId);
   const total = all.reduce((sum, c) => sum + c.content.length, 0);
 
   if (total <= CONTEXT_BUDGET) return { chunks: all, strategy: "full" };

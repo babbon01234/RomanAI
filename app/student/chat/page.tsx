@@ -24,7 +24,7 @@ export default async function StudentChatPage() {
   // (or picking the phone back up) doesn't lose the conversation.
   const history: Record<string, Exchange[]> = {};
   for (const lesson of lessons) {
-    if (lesson.chunk_count === 0) continue;
+    if (lesson.approved_count === 0) continue;
 
     history[lesson.id] = listMessagesForStudent(lesson.id, name).map(
       (message) => {
@@ -36,6 +36,7 @@ export default async function StudentChatPage() {
           citations,
           found: message.source === "faq" || citations.length > 0,
           source: message.source,
+          handedOff: message.outcome === "needs_human",
           restored: true,
         };
       },

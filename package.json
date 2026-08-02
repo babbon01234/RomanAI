@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start -p 5880",
     "lint": "eslint",
-    "test": "node --import tsx --test tests/*.test.*ts",
-    "test:e2e": "node tests/e2e.mjs"
+    "test": "node --conditions=react-server --import tsx --test tests/*.test.*ts",
+    "test:e2e": "node tests/e2e.mjs",
+    "test:canvas": "node tests/canvas-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

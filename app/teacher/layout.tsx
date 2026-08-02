@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/session";
+import { countPendingChunks } from "@/lib/db/queries";
 import { getRole } from "@/lib/session";
 import { TEACHER_NAME } from "@/lib/types";
 import { TeacherNav } from "@/components/teacher/TeacherNav";
@@ -21,7 +22,7 @@ export default async function TeacherLayout({
             Office Hours
           </Link>
 
-          <TeacherNav />
+          <TeacherNav pending={countPendingChunks()} />
 
           <form action={signOut} className="ml-auto">
             <button

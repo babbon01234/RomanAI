@@ -6,7 +6,10 @@ import type { FileKind, ParsedChunk } from "@/lib/types";
 export const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".pptx"] as const;
 export const ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.join(",");
 
-export function kindFromFilename(filename: string): FileKind | null {
+/** Kinds that come from actual bytes. "html" is rich text and parses elsewhere. */
+export type DocumentKind = Exclude<FileKind, "html">;
+
+export function kindFromFilename(filename: string): DocumentKind | null {
   const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
   if (ext === ".pdf") return "pdf";
   if (ext === ".docx") return "docx";
@@ -16,7 +19,7 @@ export function kindFromFilename(filename: string): FileKind | null {
 
 export async function parseFile(
   buffer: Buffer,
-  kind: FileKind,
+  kind: DocumentKind,
 ): Promise<ParsedChunk[]> {
   const chunks =
     kind === "pdf"

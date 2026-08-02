@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/teacher", label: "Lessons" },
+  { href: "/teacher/review", label: "Review" },
   { href: "/teacher/questions", label: "Questions" },
   { href: "/teacher/faq", label: "FAQ" },
 ];
 
-export function TeacherNav() {
+/** @param pending unreviewed passages across every lesson — 0 hides the count. */
+export function TeacherNav({ pending }: { pending: number }) {
   const pathname = usePathname();
 
   return (
@@ -31,6 +33,12 @@ export function TeacherNav() {
             }
           >
             {label}
+            {/* Work waiting on a person, so it's a count and not a red dot. */}
+            {href === "/teacher/review" && pending > 0 && (
+              <span className="ml-1.5 rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium text-ink">
+                {pending > 99 ? "99+" : pending}
+              </span>
+            )}
           </Link>
         );
       })}

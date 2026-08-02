@@ -20,7 +20,7 @@ export function LessonTabs({
     >
       {lessons.map((lesson) => {
         const active = lesson.id === selectedId;
-        const askable = lesson.chunk_count > 0;
+        const askable = lesson.approved_count > 0;
 
         return (
           <button
@@ -29,7 +29,13 @@ export function LessonTabs({
             aria-selected={active}
             disabled={!askable}
             onClick={() => onSelect(lesson.id)}
-            title={askable ? undefined : "Still processing"}
+            title={
+              askable
+                ? undefined
+                : lesson.status === "processing"
+                  ? "Still processing"
+                  : "Your teacher hasn’t approved this lesson yet"
+            }
             className={
               "relative max-w-[14rem] shrink-0 truncate rounded-t-lg border border-b-0 px-4 pb-2.5 text-[13px] transition-all duration-150 ease-[var(--ease-quiet)] " +
               (active

@@ -17,20 +17,32 @@ export default function TeacherLessonsPage() {
           </p>
         </div>
 
-        <Link
-          href="/teacher/lessons/new"
-          className="rounded-lg bg-gold px-4 py-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:bg-gold-deep hover:text-parchment"
-        >
-          Add a lesson
-        </Link>
+        {/* Two ways in. Canvas is the primary path now, but manual upload
+            stays first-class — it's how you test without touching Canvas. */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href="/teacher/canvas"
+            className="rounded-lg border border-parchment-line bg-white/70 px-4 py-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-gold hover:bg-gold-wash/50"
+          >
+            Sync from Canvas
+          </Link>
+
+          <Link
+            href="/teacher/lessons/new"
+            className="rounded-lg bg-gold px-4 py-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:bg-gold-deep hover:text-parchment"
+          >
+            Add a lesson
+          </Link>
+        </div>
       </div>
 
       {lessons.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-parchment-line bg-white/40 px-6 py-14 text-center">
           <p className="font-display text-lg text-ink">No lessons yet</p>
           <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-charcoal-muted">
-            Add a lesson and upload the slides or handout. Students can start
-            asking as soon as it finishes processing.
+            Sync a Canvas course, or add a lesson and upload the slides
+            yourself. Students can start asking as soon as it finishes
+            processing.
           </p>
         </div>
       ) : (

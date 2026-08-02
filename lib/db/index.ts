@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { flagContent, serializeFlags } from "@/lib/review/flags";
 
 /**
  * Single process-wide connection. Next's dev server re-evaluates modules on
@@ -10,10 +11,89 @@ import path from "node:path";
 const globalForDb = globalThis as unknown as { db?: Database.Database };
 
 export const DATA_DIR = path.join(process.cwd(), "data");
-export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
 /** Overridable so tests can run against a throwaway database. */
 const DB_FILE = process.env.OFFICE_HOURS_DB ?? path.join(DATA_DIR, "app.db");
+
+/**
+ * Uploads sit beside the database rather than at a fixed path, so pointing
+ * OFFICE_HOURS_DB at a temp file isolates the files a test writes as well as
+ * its rows. Unchanged in normal use: data/app.db still means data/uploads.
+ */
+export const UPLOAD_DIR = path.join(path.dirname(DB_FILE), "uploads");
+
+/**
+ * Columns added after a database already exists. `CREATE TABLE IF NOT EXISTS`
+ * is a no-op on an existing table, so a Phase 1 database would never grow the
+ * Phase 2 provenance columns without this. Adding a column is idempotent here
+ * because we check what's already there first.
+ */
+const ADDED_COLUMNS: Record<string, Record<string, string>> = {
+  lessons: {
+    canvas_course_id: "TEXT",
+    canvas_kind: "TEXT",
+    canvas_item_id: "TEXT",
+    synced_at: "TEXT",
+  },
+  files: {
+    canvas_file_id: "TEXT",
+    canvas_updated_at: "TEXT",
+  },
+  chunks: {
+    // Existing chunks become 'pending' — Phase 3 must not grandfather in
+    // content no teacher has looked at.
+    approval_status: "TEXT NOT NULL DEFAULT 'pending'",
+    flags: "TEXT NOT NULL DEFAULT '[]'",
+    reviewed_at: "TEXT",
+  },
+  messages: {
+    // Questions logged before Phase 4 were all answered by the old pipeline;
+    // 'answered' is the honest default for them.
+    outcome: "TEXT NOT NULL DEFAULT 'answered'",
+    human_reason: "TEXT",
+  },
+};
+
+/** @returns the columns this run actually added, as "table.column". */
+function migrate(db: Database.Database): string[] {
+  const added: string[] = [];
+
+  for (const [table, columns] of Object.entries(ADDED_COLUMNS)) {
+    const existing = new Set(
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+        (row) => row.name,
+      ),
+    );
+
+    for (const [name, type] of Object.entries(columns)) {
+      if (!existing.has(name)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+        added.push(`${table}.${name}`);
+      }
+    }
+  }
+
+  return added;
+}
+
+/**
+ * Chunks stored before Phase 3 have no flags, because flags are computed on
+ * insert. Left alone they would all read as unflagged, and the review queue's
+ * "approve all unflagged" would wave an existing answer key straight through
+ * to students — the one outcome this phase exists to prevent. So the backfill
+ * runs once, when the column is first added.
+ */
+function backfillFlags(db: Database.Database): void {
+  const rows = db.prepare("SELECT id, content FROM chunks").all() as {
+    id: string;
+    content: string;
+  }[];
+
+  const update = db.prepare("UPDATE chunks SET flags = ? WHERE id = ?");
+  for (const row of rows) {
+    update.run(serializeFlags(flagContent(row.content)), row.id);
+  }
+}
 
 function connect(): Database.Database {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -21,14 +101,54 @@ function connect(): Database.Database {
   const db = new Database(DB_FILE);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  // `next build` collects page data across several worker processes, each of
+  // which opens the database and runs setup. Without a wait they collide.
+  db.pragma("busy_timeout = 10000");
 
   const schema = fs.readFileSync(
     path.join(process.cwd(), "lib", "db", "schema.sql"),
     "utf8",
   );
-  db.exec(schema);
+
+  // Tables first, then the added columns, then the indexes — the unique index
+  // on the canvas_* columns can't be created before they exist.
+  //
+  // Exclusive, because two processes reaching ALTER TABLE together both see
+  // the column as missing and the loser fails with "duplicate column name".
+  // Serialized, the second one re-reads table_info and finds nothing to do.
+  const [tables, indexes] = splitSchema(schema);
+  db.transaction(() => {
+    db.exec(tables);
+    const added = migrate(db);
+    db.exec(indexes);
+
+    if (added.includes("chunks.flags")) backfillFlags(db);
+  }).exclusive();
 
   return db;
+}
+
+/**
+ * Splits schema.sql into table statements and index statements. Ordering
+ * matters only because an index on a freshly migrated column has to come
+ * after the ALTER TABLE that adds it.
+ */
+function splitSchema(schema: string): [string, string] {
+  // Comments go first: prose is allowed to contain semicolons, and splitting
+  // on them without this cuts a sentence in half and hands SQLite the rest.
+  const statements = schema
+    .replace(/--[^\n]*/g, "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const isIndex = (s: string) => /^CREATE\s+(UNIQUE\s+)?INDEX/i.test(s);
+  const join = (list: string[]) => list.map((s) => `${s};`).join("\n");
+
+  return [
+    join(statements.filter((s) => !isIndex(s))),
+    join(statements.filter(isIndex)),
+  ];
 }
 
 export const db = globalForDb.db ?? (globalForDb.db = connect());

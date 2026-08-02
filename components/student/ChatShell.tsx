@@ -2,10 +2,12 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { FaqChips } from "./FaqChips";
+import { GradeButton } from "./GradeButton";
 import { LessonTabs } from "./LessonTabs";
 import { MarginNote } from "./MarginNote";
 import type { ChatResponse } from "@/app/api/chat/route";
-import type { Citation, Faq, LessonSummary } from "@/lib/types";
+import type { GradeResponse } from "@/app/api/canvas/submission/route";
+import type { AnswerSource, Citation, Faq, LessonSummary } from "@/lib/types";
 
 export interface Exchange {
   key: string;
@@ -14,7 +16,9 @@ export interface Exchange {
   citations: Citation[];
   found?: boolean;
   /** "faq" when a teacher-approved answer matched — no model call was made. */
-  source?: "faq" | "model";
+  source?: AnswerSource;
+  /** true when the bot handed the question to the teacher instead of answering. */
+  handedOff?: boolean;
   error?: string;
   /**
    * Rehydrated from the log rather than just answered. The margin-scrawl is
@@ -36,7 +40,9 @@ export function ChatShell({
   history: Record<string, Exchange[]>;
   rehearsal: boolean;
 }) {
-  const askable = lessons.filter((l) => l.chunk_count > 0);
+  // Approved passages, not merely parsed ones — a lesson whose content is
+  // still awaiting the teacher has nothing that can be answered from.
+  const askable = lessons.filter((l) => l.approved_count > 0);
   const [lessonId, setLessonId] = useState<string | null>(
     askable[0]?.id ?? null,
   );
@@ -47,6 +53,7 @@ export function ChatShell({
 
   const exchanges = lessonId ? (byLesson[lessonId] ?? []) : [];
   const lessonFaqs = faqs.filter((f) => f.lesson_id === lessonId);
+  const selected = lessons.find((l) => l.id === lessonId);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -87,6 +94,59 @@ export function ChatShell({
           citations: data.citations,
           found: data.found,
           source: data.source,
+          handedOff: data.outcome === "needs_human",
+        });
+    } catch {
+      patch({ error: "Couldn’t reach the server. Try again." });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /**
+   * Same shape as asking, different endpoint. It reads as an exchange in the
+   * transcript because that's what it is from the student's side — they asked
+   * a question and got an answer, with the rubric row in the margin where a
+   * slide number would be.
+   */
+  async function askAboutGrade() {
+    if (!lessonId || sending) return;
+
+    const key = `grade-${Date.now()}`;
+    const id = lessonId;
+    const question = "Why did I lose points on this?";
+
+    setByLesson((prev) => ({
+      ...prev,
+      [id]: [...(prev[id] ?? []), { key, question, citations: [] }],
+    }));
+    setSending(true);
+
+    const patch = (fields: Partial<Exchange>) =>
+      setByLesson((prev) => ({
+        ...prev,
+        [id]: (prev[id] ?? []).map((e) =>
+          e.key === key ? { ...e, ...fields } : e,
+        ),
+      }));
+
+    try {
+      const res = await fetch("/api/canvas/submission", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lessonId: id }),
+      });
+      const data = (await res.json()) as GradeResponse & { error?: string };
+
+      if (!res.ok) patch({ error: data.error ?? "Couldn’t look up your grade." });
+      else
+        patch({
+          answer: data.answer,
+          citations: data.citations,
+          found: data.graded,
+          source: "grade",
+          // An ungraded assignment is a hand-off, not a failed answer.
+          handedOff: !data.graded,
         });
     } catch {
       patch({ error: "Couldn’t reach the server. Try again." });
@@ -98,7 +158,9 @@ export function ChatShell({
   if (askable.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-parchment-line bg-white/50 px-6 py-14 text-center text-[14px] text-charcoal-muted">
-        Your teacher hasn’t added any lessons yet.
+        {lessons.length === 0
+          ? "Your teacher hasn’t added any lessons yet."
+          : "Your teacher is still going through this material. Check back soon."}
       </p>
     );
   }
@@ -166,6 +228,16 @@ export function ChatShell({
           disabled={sending || !lessonId}
         />
 
+        {/* Only on a Canvas assignment — everywhere else there is no rubric
+            behind it and the button would promise something it can't do. */}
+        {selected?.canvas_kind === "assignment" && (
+          <GradeButton
+            onAsk={askAboutGrade}
+            disabled={sending || !lessonId}
+            pending={sending}
+          />
+        )}
+
         <Composer
           value={draft}
           onChange={setDraft}
@@ -201,6 +273,12 @@ function ExchangeRows({ exchange }: { exchange: Exchange }) {
       >
         {exchange.error ? (
           <p className="text-[14px] leading-8 text-red-700">{exchange.error}</p>
+        ) : exchange.handedOff ? (
+          /* Not a failed answer — a deliberate redirect. It gets its own
+             quiet frame so it doesn't read as the bot falling over. */
+          <p className="max-w-[52ch] border-l-2 border-gold-deep/50 pl-3.5 text-[15px] leading-8 text-charcoal">
+            {exchange.answer}
+          </p>
         ) : exchange.answer ? (
           <p
             className={

@@ -1,12 +1,10 @@
 "use server";
 
 import fs from "node:fs/promises";
-import path from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { UPLOAD_DIR } from "@/lib/db";
 import { createLesson, deleteLesson, listFiles } from "@/lib/db/queries";
-import { processPending, stageUpload } from "@/lib/processing";
+import { processPending, stageUpload, uploadPath } from "@/lib/processing";
 import { getRole } from "@/lib/session";
 
 export interface LessonFormState {
@@ -63,12 +61,12 @@ export async function deleteLessonAction(formData: FormData) {
   deleteLesson(lessonId);
 
   for (const file of files) {
-    const onDisk = path.join(
-      UPLOAD_DIR,
-      `${file.id}${path.extname(file.filename)}`,
-    );
+    // Canvas rich text has a row but nothing on disk.
+    if (file.kind === "html") continue;
     // A missing upload shouldn't fail the delete the teacher already asked for.
-    await fs.rm(onDisk, { force: true }).catch(() => {});
+    await fs
+      .rm(uploadPath(file.id, file.filename), { force: true })
+      .catch(() => {});
   }
 
   revalidatePath("/teacher");

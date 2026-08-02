@@ -26,6 +26,12 @@ export interface Answer {
   citations: Citation[];
   /** false when the material doesn't cover the question. */
   found: boolean;
+  /**
+   * The model's own read on whether this is its question to answer — set even
+   * when the material would have covered it. The route decides what to do
+   * with it; see lib/triage.ts for the pass that runs before this one.
+   */
+  needsHuman: boolean;
   provider: Provider;
 }
 
@@ -53,6 +59,7 @@ export async function answerQuestion(opts: {
       text: NOT_IN_MATERIALS,
       citations: [],
       found: false,
+      needsHuman: false,
       provider,
     };
   }
@@ -100,6 +107,7 @@ async function askClaude({
       text: NOT_IN_MATERIALS,
       citations: [],
       found: false,
+      needsHuman: false,
       provider: "anthropic",
     };
   }
@@ -115,6 +123,7 @@ async function askClaude({
     answer: string;
     found: boolean;
     sources: number[];
+    needs_human: boolean;
   };
 
   // Map cited indices back to real chunks; anything out of range is dropped,
@@ -130,6 +139,7 @@ async function askClaude({
     text: parsed.answer.trim(),
     citations,
     found: parsed.found && citations.length > 0,
+    needsHuman: Boolean(parsed.needs_human),
     provider: "anthropic",
   };
 }
@@ -169,6 +179,9 @@ function rehearse({
       text: NOT_IN_MATERIALS,
       citations: [],
       found: false,
+      // Rehearsal extracts rather than reasons, so it has no opinion here.
+      // The deterministic pass in lib/triage.ts is what covers this mode.
+      needsHuman: false,
       provider: "rehearsal",
     };
   }
@@ -182,6 +195,7 @@ function rehearse({
     text,
     citations: ranked.map(({ chunk }) => cite(chunk, lessonTitle, nameOf(chunk))),
     found: true,
+    needsHuman: false,
     provider: "rehearsal",
   };
 }
