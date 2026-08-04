@@ -15,18 +15,18 @@ after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 let lessonId: string;
 let fileId: string;
 
-before(() => {
-  lessonId = q.createLesson("Unit 3", "Photosynthesis");
-  fileId = q.createFile(lessonId, "deck.pptx", "pptx");
-  q.insertChunks(lessonId, fileId, [
+before(async () => {
+  lessonId = await q.createLesson("Unit 3", "Photosynthesis");
+  fileId = await q.createFile(lessonId, "deck.pptx", "pptx");
+  await q.insertChunks(lessonId, fileId, [
     { locator: "Slide 1", content: "Light reactions happen in the thylakoid." },
     { locator: "Slide 2", content: "The Calvin cycle happens in the stroma." },
   ]);
-  q.setFileStatus(fileId, "ready", { chunkCount: 2 });
+  await q.setFileStatus(fileId, "ready", { chunkCount: 2 });
 });
 
-test("a lesson rolls up its files' counts and status", () => {
-  const lesson = q.getLesson(lessonId)!;
+test("a lesson rolls up its files' counts and status", async () => {
+  const lesson = (await q.getLesson(lessonId))!;
 
   assert.equal(lesson.file_count, 1);
   assert.equal(lesson.chunk_count, 2);
@@ -34,18 +34,18 @@ test("a lesson rolls up its files' counts and status", () => {
   assert.equal(lesson.error, null);
 });
 
-test("a failed file surfaces its reason on the lesson", () => {
-  const id = q.createLesson("Broken", "");
-  const bad = q.createFile(id, "scan.pdf", "pdf");
-  q.setFileStatus(bad, "failed", { error: "Invalid PDF structure." });
+test("a failed file surfaces its reason on the lesson", async () => {
+  const id = await q.createLesson("Broken", "");
+  const bad = await q.createFile(id, "scan.pdf", "pdf");
+  await q.setFileStatus(bad, "failed", { error: "Invalid PDF structure." });
 
-  const lesson = q.getLesson(id)!;
+  const lesson = (await q.getLesson(id))!;
   assert.equal(lesson.status, "failed");
   // Previously only visible in the database, never to the teacher.
   assert.equal(lesson.error, "Invalid PDF structure.");
 });
 
-test("a student's history comes back oldest-first and only their own", () => {
+test("a student's history comes back oldest-first and only their own", async () => {
   // This is the regression this file exists for: the first version ordered
   // through a subquery on rowid, which SELECT * doesn't carry out — it
   // typechecked, linted, and crashed the student page at runtime.
@@ -55,7 +55,7 @@ test("a student's history comes back oldest-first and only their own", () => {
     ["Jordan", "not Priya's"],
     ["Priya", "third"],
   ] as const) {
-    q.logMessage({
+    await q.logMessage({
       lessonId,
       studentName: student,
       question,
@@ -65,7 +65,7 @@ test("a student's history comes back oldest-first and only their own", () => {
     });
   }
 
-  const priya = q.listMessagesForStudent(lessonId, "Priya");
+  const priya = await q.listMessagesForStudent(lessonId, "Priya");
 
   assert.deepEqual(
     priya.map((m) => m.question),
@@ -74,10 +74,10 @@ test("a student's history comes back oldest-first and only their own", () => {
   assert.ok(priya.every((m) => m.student_name === "Priya"));
 });
 
-test("history is capped at the limit, keeping the most recent", () => {
-  const id = q.createLesson("Chatty", "");
+test("history is capped at the limit, keeping the most recent", async () => {
+  const id = await q.createLesson("Chatty", "");
   for (let i = 0; i < 6; i++) {
-    q.logMessage({
+    await q.logMessage({
       lessonId: id,
       studentName: "Sam",
       question: `q${i}`,
@@ -87,19 +87,19 @@ test("history is capped at the limit, keeping the most recent", () => {
     });
   }
 
-  const recent = q.listMessagesForStudent(id, "Sam", 3);
+  const recent = await q.listMessagesForStudent(id, "Sam", 3);
   assert.deepEqual(
     recent.map((m) => m.question),
     ["q3", "q4", "q5"],
   );
 });
 
-test("deleting a lesson takes its chunks, files, messages and FAQs with it", () => {
-  const id = q.createLesson("Doomed", "");
-  const doomedFile = q.createFile(id, "x.pdf", "pdf");
-  q.insertChunks(id, doomedFile, [{ locator: "Page 1", content: "content" }]);
-  q.createFaq(id, "a question", "an answer");
-  q.logMessage({
+test("deleting a lesson takes its chunks, files, messages and FAQs with it", async () => {
+  const id = await q.createLesson("Doomed", "");
+  const doomedFile = await q.createFile(id, "x.pdf", "pdf");
+  await q.insertChunks(id, doomedFile, [{ locator: "Page 1", content: "content" }]);
+  await q.createFaq(id, "a question", "an answer");
+  await q.logMessage({
     lessonId: id,
     studentName: "Alex",
     question: "q",
@@ -108,19 +108,19 @@ test("deleting a lesson takes its chunks, files, messages and FAQs with it", () 
     source: "model",
   });
 
-  assert.equal(q.listChunksForReview(id).length, 1);
+  assert.equal((await q.listChunksForReview(id)).length, 1);
 
-  q.deleteLesson(id);
+  await q.deleteLesson(id);
 
-  assert.equal(q.getLesson(id), undefined);
-  assert.equal(q.listChunksForReview(id).length, 0);
-  assert.equal(q.listFiles(id).length, 0);
-  assert.equal(q.listFaqs(id).length, 0);
-  assert.equal(q.listMessagesForStudent(id, "Alex").length, 0);
+  assert.equal(await q.getLesson(id), undefined);
+  assert.equal((await q.listChunksForReview(id)).length, 0);
+  assert.equal((await q.listFiles(id)).length, 0);
+  assert.equal((await q.listFaqs(id)).length, 0);
+  assert.equal((await q.listMessagesForStudent(id, "Alex")).length, 0);
 });
 
-test("promoting a question links it to the new FAQ", () => {
-  const messageId = q.logMessage({
+test("promoting a question links it to the new FAQ", async () => {
+  const messageId = await q.logMessage({
     lessonId,
     studentName: "Marcus",
     question: "When is it due?",
@@ -129,8 +129,8 @@ test("promoting a question links it to the new FAQ", () => {
     source: "model",
   });
 
-  const faqId = q.createFaq(lessonId, "When is it due?", "Friday.");
-  q.markMessagePromoted(messageId, faqId);
+  const faqId = await q.createFaq(lessonId, "When is it due?", "Friday.");
+  await q.markMessagePromoted(messageId, faqId);
 
-  assert.equal(q.getMessage(messageId)!.promoted_faq_id, faqId);
+  assert.equal((await q.getMessage(messageId))!.promoted_faq_id, faqId);
 });

@@ -38,7 +38,7 @@ export async function decideChunk(formData: FormData) {
   const chunkId = String(formData.get("chunkId") ?? "");
   if (!chunkId) return;
 
-  setChunkApproval(chunkId, readStatus(formData.get("status")));
+  await setChunkApproval(chunkId, readStatus(formData.get("status")));
   refresh();
 }
 
@@ -46,8 +46,8 @@ export async function approveUnflaggedAction(formData: FormData) {
   await assertTeacher();
 
   const lessonId = String(formData.get("lessonId") ?? "");
-  if (!lessonId || !getLesson(lessonId)) return;
+  if (!lessonId || !(await getLesson(lessonId))) return;
 
-  approveUnflagged(lessonId);
+  await approveUnflagged(lessonId);
   refresh();
 }

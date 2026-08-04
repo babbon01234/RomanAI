@@ -102,11 +102,11 @@ test("the same vocabulary in ordinary teaching text doesn't fire", () => {
 
 /* ------------------------- the gate, end to end -------------------------- */
 
-function seed(title: string, chunks: { locator: string; content: string }[]) {
-  const lessonId = q.createLesson(title, "");
-  const fileId = q.createFile(lessonId, "handout.pdf", "pdf");
-  q.insertChunks(lessonId, fileId, chunks);
-  q.setFileStatus(fileId, "ready", { chunkCount: chunks.length });
+async function seed(title: string, chunks: { locator: string; content: string }[]) {
+  const lessonId = await q.createLesson(title, "");
+  const fileId = await q.createFile(lessonId, "handout.pdf", "pdf");
+  await q.insertChunks(lessonId, fileId, chunks);
+  await q.setFileStatus(fileId, "ready", { chunkCount: chunks.length });
   return lessonId;
 }
 
@@ -116,43 +116,43 @@ const LESSON = [
   { locator: "Page 3", content: "Answer Key: 1. thylakoid  2. stroma  3. chlorophyll" },
 ];
 
-test("everything arrives pending — nothing is answerable on upload", () => {
-  const lessonId = seed("Unit 3", LESSON);
+test("everything arrives pending — nothing is answerable on upload", async () => {
+  const lessonId = await seed("Unit 3", LESSON);
 
-  const all = q.listChunksForReview(lessonId);
+  const all = await q.listChunksForReview(lessonId);
   assert.equal(all.length, 3);
   assert.ok(
     all.every((c) => c.approval_status === "pending"),
     "a freshly uploaded chunk must never be approved",
   );
 
-  assert.equal(q.getApprovedChunks(lessonId).length, 0);
+  assert.equal((await q.getApprovedChunks(lessonId)).length, 0);
   // The real assertion: retrieval, not just the query underneath it.
-  assert.equal(selectChunks(lessonId, "What is the Calvin cycle?").chunks.length, 0);
+  assert.equal((await selectChunks(lessonId, "What is the Calvin cycle?")).chunks.length, 0);
 });
 
-test("the answer key in that upload is the passage that got flagged", () => {
-  const lessonId = seed("Unit 3 again", LESSON);
-  const flagged = q
-    .listChunksForReview(lessonId)
-    .filter((c) => c.flags !== "[]");
+test("the answer key in that upload is the passage that got flagged", async () => {
+  const lessonId = await seed("Unit 3 again", LESSON);
+  const flagged = (await q.listChunksForReview(lessonId)).filter(
+    (c) => c.flags !== "[]",
+  );
 
   assert.deepEqual(flagged.map((c) => c.locator), ["Page 3"]);
 });
 
-test("approving opens exactly one passage, and rejecting keeps one shut", () => {
-  const lessonId = seed("Unit 3 third", LESSON);
-  const [first, , key] = q.listChunksForReview(lessonId);
+test("approving opens exactly one passage, and rejecting keeps one shut", async () => {
+  const lessonId = await seed("Unit 3 third", LESSON);
+  const [first, , key] = await q.listChunksForReview(lessonId);
 
-  q.setChunkApproval(first.id, "approved");
-  q.setChunkApproval(key.id, "rejected");
+  await q.setChunkApproval(first.id, "approved");
+  await q.setChunkApproval(key.id, "rejected");
 
-  const approved = q.getApprovedChunks(lessonId);
+  const approved = await q.getApprovedChunks(lessonId);
   assert.deepEqual(approved.map((c) => c.locator), ["Page 1"]);
 
   // A question that matches the rejected passage's wording must still not
   // reach it — this is the (c) case in the Phase 3 definition of done.
-  const retrieved = selectChunks(lessonId, "thylakoid stroma chlorophyll answer");
+  const retrieved = await selectChunks(lessonId, "thylakoid stroma chlorophyll answer");
   assert.deepEqual(retrieved.chunks.map((c) => c.locator), ["Page 1"]);
   assert.ok(
     retrieved.chunks.every((c) => !c.content.includes("Answer Key")),
@@ -160,28 +160,28 @@ test("approving opens exactly one passage, and rejecting keeps one shut", () => 
   );
 });
 
-test("bulk approval clears the unflagged and leaves the flagged alone", () => {
-  const lessonId = seed("Unit 4", LESSON);
+test("bulk approval clears the unflagged and leaves the flagged alone", async () => {
+  const lessonId = await seed("Unit 4", LESSON);
 
-  const approved = q.approveUnflagged(lessonId);
+  const approved = await q.approveUnflagged(lessonId);
   assert.equal(approved, 2);
 
-  const after = q.listChunksForReview(lessonId);
+  const after = await q.listChunksForReview(lessonId);
   const key = after.find((c) => c.locator === "Page 3")!;
   assert.equal(key.approval_status, "pending", "a flagged passage needs a person");
-  assert.equal(q.getApprovedChunks(lessonId).length, 2);
+  assert.equal((await q.getApprovedChunks(lessonId)).length, 2);
 });
 
-test("bulk approval doesn't overturn a decision the teacher already made", () => {
-  const lessonId = seed("Unit 5", LESSON);
-  const [first] = q.listChunksForReview(lessonId);
+test("bulk approval doesn't overturn a decision the teacher already made", async () => {
+  const lessonId = await seed("Unit 5", LESSON);
+  const [first] = await q.listChunksForReview(lessonId);
 
-  q.setChunkApproval(first.id, "rejected");
-  const approved = q.approveUnflagged(lessonId);
+  await q.setChunkApproval(first.id, "rejected");
+  const approved = await q.approveUnflagged(lessonId);
 
   assert.equal(approved, 1, "only the still-pending unflagged passage");
   assert.equal(
-    q.listChunksForReview(lessonId).find((c) => c.id === first.id)!.approval_status,
+    (await q.listChunksForReview(lessonId)).find((c) => c.id === first.id)!.approval_status,
     "rejected",
   );
 });
@@ -224,12 +224,13 @@ test("a pre-Phase-3 database comes back with its content pending and flagged", (
       "tsx",
       "-e",
       `import { listLessons, listChunksForReview } from "@/lib/db/queries";
-       const [lesson] = listLessons();
+       const [lesson] = await listLessons();
+       const chunks = await listChunksForReview(lesson.id);
        console.log(JSON.stringify({
          pending: lesson.pending_count,
          approved: lesson.approved_count,
          flagged: lesson.flagged_count,
-         flaggedLocators: listChunksForReview(lesson.id)
+         flaggedLocators: chunks
            .filter((c) => c.flags !== "[]")
            .map((c) => c.locator),
        }));`,
@@ -245,17 +246,17 @@ test("a pre-Phase-3 database comes back with its content pending and flagged", (
   assert.deepEqual(result.flaggedLocators, ["Page 2"]);
 });
 
-test("a lesson's counts drive what the student side is allowed to show", () => {
-  const lessonId = seed("Unit 6", LESSON);
+test("a lesson's counts drive what the student side is allowed to show", async () => {
+  const lessonId = await seed("Unit 6", LESSON);
 
-  let lesson = q.getLesson(lessonId)!;
+  let lesson = (await q.getLesson(lessonId))!;
   assert.equal(lesson.chunk_count, 3);
   assert.equal(lesson.approved_count, 0, "no lesson is askable before review");
   assert.equal(lesson.pending_count, 3);
   assert.equal(lesson.flagged_count, 1);
 
-  q.approveUnflagged(lessonId);
-  lesson = q.getLesson(lessonId)!;
+  await q.approveUnflagged(lessonId);
+  lesson = (await q.getLesson(lessonId))!;
 
   assert.equal(lesson.approved_count, 2);
   assert.equal(lesson.pending_count, 1);

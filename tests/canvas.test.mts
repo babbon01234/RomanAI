@@ -243,7 +243,7 @@ async function download(url: string): Promise<Buffer> {
 }
 
 async function runSync(plan: ReturnType<typeof planCourse>) {
-  const { report, pending } = applyPlan(plan, download);
+  const { report, pending } = await applyPlan(plan, download);
   for (const { lessonId, items } of pending) await processPending(lessonId, items);
   return report;
 }
@@ -253,11 +253,11 @@ test("re-syncing updates in place instead of duplicating", async () => {
 
   assert.equal(first.created, 4);
   assert.equal(first.updated, 0);
-  assert.equal(q.listCanvasLessons("4021").length, 4);
+  assert.equal((await q.listCanvasLessons("4021")).length, 4);
 
   // The whole point of pulling files: a real slide number reaches the citation.
-  const moduleLesson = q.listCanvasLessons("4021").find((l) => l.canvas_kind === "module")!;
-  const locators = q.listChunksForReview(moduleLesson.id).map((c) => c.locator);
+  const moduleLesson = (await q.listCanvasLessons("4021")).find((l) => l.canvas_kind === "module")!;
+  const locators = (await q.listChunksForReview(moduleLesson.id)).map((c) => c.locator);
   assert.ok(locators.includes("Slide 4"), `expected a Slide 4 locator in ${locators}`);
   assert.equal(moduleLesson.status, "ready");
 
@@ -269,15 +269,15 @@ test("re-syncing updates in place instead of duplicating", async () => {
   assert.ok(second.unchanged > 0);
 
   // Still four lessons, and the module's chunks weren't duplicated.
-  assert.equal(q.listCanvasLessons("4021").length, 4);
-  assert.deepEqual(q.listChunksForReview(moduleLesson.id).map((c) => c.locator), locators);
+  assert.equal((await q.listCanvasLessons("4021")).length, 4);
+  assert.deepEqual((await q.listChunksForReview(moduleLesson.id)).map((c) => c.locator), locators);
 });
 
 test("a lesson keeps its id across a re-sync, so its question log survives", async () => {
   await runSync(fixturePlan(4022));
-  const before = q.listCanvasLessons("4022").find((l) => l.canvas_kind === "assignment")!;
+  const before = (await q.listCanvasLessons("4022")).find((l) => l.canvas_kind === "assignment")!;
 
-  q.logMessage({
+  await q.logMessage({
     lessonId: before.id,
     studentName: "Priya",
     question: "When is the lab report due?",
@@ -293,10 +293,10 @@ test("a lesson keeps its id across a re-sync, so its question log survives", asy
     }),
   );
 
-  const after = q.listCanvasLessons("4022").find((l) => l.canvas_kind === "assignment")!;
+  const after = (await q.listCanvasLessons("4022")).find((l) => l.canvas_kind === "assignment")!;
   assert.equal(after.id, before.id);
   assert.equal(after.title, "Lab report 2 (revised)");
-  assert.equal(q.listMessagesForStudent(after.id, "Priya").length, 1);
+  assert.equal((await q.listMessagesForStudent(after.id, "Priya")).length, 1);
 });
 
 test("an edited file is re-read; a deleted one stops being answerable", async () => {
@@ -309,16 +309,16 @@ test("an edited file is re-read; a deleted one stops being answerable", async ()
 
   assert.equal(changed.added, 1, "only the file Canvas says changed is re-read");
 
-  const moduleLesson = q.listCanvasLessons("4023").find((l) => l.canvas_kind === "module")!;
+  const moduleLesson = (await q.listCanvasLessons("4023")).find((l) => l.canvas_kind === "module")!;
   // Re-read, not read twice: the deck contributes the same chunks as before.
-  assert.equal(q.listFiles(moduleLesson.id).filter((f) => f.kind === "pptx").length, 1);
+  assert.equal((await q.listFiles(moduleLesson.id)).filter((f) => f.kind === "pptx").length, 1);
 
   const removed = await runSync(fixturePlan(4023, { files: [FILES[1], FILES[2]] }));
 
   assert.equal(removed.removed, 1);
-  assert.equal(q.listFiles(moduleLesson.id).filter((f) => f.kind === "pptx").length, 0);
+  assert.equal((await q.listFiles(moduleLesson.id)).filter((f) => f.kind === "pptx").length, 0);
   assert.equal(
-    q.listChunksForReview(moduleLesson.id).some((c) => c.locator.startsWith("Slide")),
+    (await q.listChunksForReview(moduleLesson.id)).some((c) => c.locator.startsWith("Slide")),
     false,
     "chunks from a file deleted in Canvas must not answer questions",
   );
@@ -331,20 +331,20 @@ test("a lesson whose Canvas source disappeared is reported, not deleted", async 
   assert.deepEqual(report.stale, ["Lab report 2"]);
   // Still there — deleting it would cascade the teacher's question log.
   assert.ok(
-    q.listCanvasLessons("4024").some((l) => l.canvas_kind === "assignment"),
+    (await q.listCanvasLessons("4024")).some((l) => l.canvas_kind === "assignment"),
   );
 });
 
 test("a manually uploaded lesson is never touched by a sync", async () => {
-  const manual = q.createLesson("Hand-made lesson", "Uploaded, not synced.");
-  const file = q.createFile(manual, "notes.pdf", "pdf");
-  q.insertChunks(manual, file, [{ locator: "Page 1", content: "Manual content." }]);
-  q.setFileStatus(file, "ready", { chunkCount: 1 });
+  const manual = await q.createLesson("Hand-made lesson", "Uploaded, not synced.");
+  const file = await q.createFile(manual, "notes.pdf", "pdf");
+  await q.insertChunks(manual, file, [{ locator: "Page 1", content: "Manual content." }]);
+  await q.setFileStatus(file, "ready", { chunkCount: 1 });
 
   await runSync(fixturePlan(4025));
 
-  const after = q.getLesson(manual)!;
+  const after = (await q.getLesson(manual))!;
   assert.equal(after.canvas_course_id, null);
   assert.equal(after.chunk_count, 1);
-  assert.equal(q.listCanvasLessons("4025").some((l) => l.id === manual), false);
+  assert.equal((await q.listCanvasLessons("4025")).some((l) => l.id === manual), false);
 });

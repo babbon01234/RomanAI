@@ -21,8 +21,8 @@ export interface Retrieval {
  * cannot enter a prompt, and cannot be cited. Same call for manually uploaded
  * and Canvas-synced lessons; neither has a path around it.
  */
-export function selectChunks(lessonId: string, question: string): Retrieval {
-  const all = getApprovedChunks(lessonId);
+export async function selectChunks(lessonId: string, question: string): Promise<Retrieval> {
+  const all = await getApprovedChunks(lessonId);
   const total = all.reduce((sum, c) => sum + c.content.length, 0);
 
   if (total <= CONTEXT_BUDGET) return { chunks: all, strategy: "full" };

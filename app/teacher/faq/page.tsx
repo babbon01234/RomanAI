@@ -4,9 +4,9 @@ import { listAllFaqs, listLessons } from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
 
-export default function TeacherFaqPage() {
-  const faqs = listAllFaqs();
-  const titles = new Map(listLessons().map((l) => [l.id, l.title]));
+export default async function TeacherFaqPage() {
+  const faqs = await listAllFaqs();
+  const titles = new Map((await listLessons()).map((l) => [l.id, l.title]));
 
   return (
     <>

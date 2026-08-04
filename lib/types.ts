@@ -30,6 +30,8 @@ export interface LessonFile {
   created_at: string;
   canvas_file_id: string | null;
   canvas_updated_at: string | null;
+  /** Where the bytes live in Vercel Blob. NULL for Canvas rich text ('html'). */
+  blob_url: string | null;
 }
 
 /** Nothing reaches a student until a teacher moves it to "approved". */

@@ -1,5 +1,4 @@
 import "server-only";
-import fs from "node:fs/promises";
 import {
   canvasFilesByKey,
   deleteFile,
@@ -7,10 +6,10 @@ import {
   upsertCanvasLesson,
 } from "@/lib/db/queries";
 import {
+  deleteBlobs,
   processPending,
   stageCanvasFile,
   stageCanvasText,
-  uploadPath,
   type Pending,
 } from "@/lib/processing";
 import { CanvasError, type CanvasClient } from "./client";
@@ -112,29 +111,29 @@ export async function fetchCourse(
  */
 export type Downloader = (url: string) => Promise<Buffer>;
 
-export function applyPlan(
+export async function applyPlan(
   plan: CoursePlan,
   download: Downloader,
-): {
+): Promise<{
   report: Omit<SyncReport, "warnings">;
   pending: { lessonId: string; items: Pending[] }[];
-  orphanedPaths: string[];
-} {
+  orphanedBlobUrls: string[];
+}> {
   const lessons: LessonReport[] = [];
   const pending: { lessonId: string; items: Pending[] }[] = [];
-  const orphanedPaths: string[] = [];
+  const orphanedBlobUrls: string[] = [];
 
   for (const planned of plan.lessons) {
-    const { id: lessonId, created } = upsertCanvasLesson(
+    const { id: lessonId, created } = await upsertCanvasLesson(
       { courseId: plan.courseId, kind: planned.kind, itemId: planned.itemId },
       { title: planned.title, description: planned.description },
     );
 
-    const existing = canvasFilesByKey(lessonId);
+    const existing = await canvasFilesByKey(lessonId);
     const items: Pending[] = [];
     let unchanged = 0;
 
-    const keep = (key: string, version: string | null): boolean => {
+    const keep = async (key: string, version: string | null): Promise<boolean> => {
       const row = existing.get(key);
       // A file that failed last time is retried even if Canvas says it hasn't
       // changed — otherwise a transient download error would be permanent.
@@ -145,8 +144,8 @@ export function applyPlan(
         row.canvas_updated_at === version;
 
       if (row && !same) {
-        deleteFile(row.id);
-        orphanedPaths.push(uploadPath(row.id, row.filename));
+        await deleteFile(row.id);
+        if (row.blob_url) orphanedBlobUrls.push(row.blob_url);
       }
       existing.delete(key);
 
@@ -155,10 +154,10 @@ export function applyPlan(
     };
 
     for (const planText of planned.texts) {
-      if (!keep(planText.key, planText.fingerprint)) continue;
+      if (!(await keep(planText.key, planText.fingerprint))) continue;
 
       items.push(
-        stageCanvasText({
+        await stageCanvasText({
           lessonId,
           filename: planText.filename,
           label: planText.label,
@@ -170,10 +169,10 @@ export function applyPlan(
     }
 
     for (const file of planned.files) {
-      if (!keep(file.canvasFileId, file.updatedAt)) continue;
+      if (!(await keep(file.canvasFileId, file.updatedAt))) continue;
 
       items.push(
-        stageCanvasFile({
+        await stageCanvasFile({
           lessonId,
           filename: file.filename,
           kind: file.kind,
@@ -188,8 +187,8 @@ export function applyPlan(
     // Canvas now. It goes, so a deleted handout stops being answerable.
     let removed = 0;
     for (const row of existing.values()) {
-      deleteFile(row.id);
-      orphanedPaths.push(uploadPath(row.id, row.filename));
+      await deleteFile(row.id);
+      if (row.blob_url) orphanedBlobUrls.push(row.blob_url);
       removed++;
     }
 
@@ -210,7 +209,7 @@ export function applyPlan(
   // deleted — deleting cascades the teacher's question log, and losing that to
   // an unpublished module would be a worse surprise than a stale lesson.
   const planKeys = new Set(plan.lessons.map((l) => `${l.kind}:${l.itemId}`));
-  const stale = listCanvasLessons(plan.courseId)
+  const stale = (await listCanvasLessons(plan.courseId))
     .filter((l) => !planKeys.has(`${l.canvas_kind}:${l.canvas_item_id}`))
     .map((l) => l.title);
 
@@ -228,7 +227,7 @@ export function applyPlan(
       stale,
     },
     pending,
-    orphanedPaths,
+    orphanedBlobUrls,
   };
 }
 
@@ -251,13 +250,11 @@ export async function syncCourse(
   const pulled = await fetchCourse(client, courseId.trim());
   const plan = planCourse(pulled);
 
-  const { report, pending, orphanedPaths } = applyPlan(plan, (url) =>
+  const { report, pending, orphanedBlobUrls } = await applyPlan(plan, (url) =>
     client.download(url),
   );
 
-  await Promise.all(
-    orphanedPaths.map((path) => fs.rm(path, { force: true }).catch(() => {})),
-  );
+  await deleteBlobs(orphanedBlobUrls);
 
   // Not awaited: same as the upload path. processPending never rejects.
   for (const { lessonId, items } of pending) void processPending(lessonId, items);

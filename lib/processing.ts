@@ -1,8 +1,7 @@
 import "server-only";
-import fs from "node:fs/promises";
 import path from "node:path";
-import { UPLOAD_DIR } from "@/lib/db";
-import { createFile, insertChunks, setFileStatus } from "@/lib/db/queries";
+import { del, put } from "@vercel/blob";
+import { createFile, insertChunks, setFileBlobUrl, setFileStatus } from "@/lib/db/queries";
 import { kindFromFilename, parseFile, type DocumentKind } from "@/lib/parsing";
 import { parseHtml } from "@/lib/parsing/html";
 import type { ParsedChunk } from "@/lib/types";
@@ -22,9 +21,27 @@ export interface Pending {
   parse: () => Promise<ParsedChunk[]>;
 }
 
-/** Where a file's bytes live once staged. Kept alongside its row's id. */
-export function uploadPath(fileId: string, filename: string): string {
-  return path.join(UPLOAD_DIR, `${fileId}${path.extname(filename)}`);
+/**
+ * Uploaded bytes go to Vercel Blob rather than local disk — a Vercel
+ * serverless function's filesystem doesn't persist across requests or
+ * deploys. The write is for durability (a later Canvas re-sync, manual
+ * re-download) rather than for this request: parsing below reads the bytes
+ * already in memory instead of reading them back.
+ *
+ * Without BLOB_READ_WRITE_TOKEN (local dev with no Blob store linked, or the
+ * test suite) this is skipped rather than thrown: the same "manual upload is
+ * the fastest way to test" story the database's local file: mode gives you.
+ * The lesson still parses and answers questions; it just has no durable copy
+ * of its source bytes until a Blob store is configured.
+ */
+async function storeBytes(fileId: string, filename: string, bytes: Buffer): Promise<void> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
+
+  const { url } = await put(`uploads/${fileId}${path.extname(filename)}`, bytes, {
+    access: "public",
+    addRandomSuffix: false,
+  });
+  await setFileBlobUrl(fileId, url);
 }
 
 async function stageBytes(
@@ -34,13 +51,12 @@ async function stageBytes(
   bytes: Buffer,
   canvas?: { fileId: string; updatedAt: string | null },
 ): Promise<Pending> {
-  const fileId = createFile(lessonId, filename, kind, canvas);
-  const diskPath = uploadPath(fileId, filename);
-  await fs.writeFile(diskPath, bytes);
+  const fileId = await createFile(lessonId, filename, kind, canvas);
+  await storeBytes(fileId, filename, bytes);
 
   return {
     fileId,
-    parse: async () => parseFile(await fs.readFile(diskPath), kind),
+    parse: async () => parseFile(bytes, kind),
   };
 }
 
@@ -63,15 +79,15 @@ export async function stageUpload(lessonId: string, file: File): Promise<Pending
  * badges as a manual upload. A download that fails lands as a failed file with
  * a readable reason instead of failing the whole sync.
  */
-export function stageCanvasFile(opts: {
+export async function stageCanvasFile(opts: {
   lessonId: string;
   filename: string;
   kind: DocumentKind;
   canvasFileId: string;
   canvasUpdatedAt: string | null;
   download: () => Promise<Buffer>;
-}): Pending {
-  const fileId = createFile(opts.lessonId, opts.filename, opts.kind, {
+}): Promise<Pending> {
+  const fileId = await createFile(opts.lessonId, opts.filename, opts.kind, {
     fileId: opts.canvasFileId,
     updatedAt: opts.canvasUpdatedAt,
   });
@@ -80,8 +96,8 @@ export function stageCanvasFile(opts: {
     fileId,
     parse: async () => {
       const bytes = await opts.download();
-      // Kept on disk like an upload, so re-parsing never needs Canvas again.
-      await fs.writeFile(uploadPath(fileId, opts.filename), bytes);
+      // Kept in Blob like an upload, so re-parsing never needs Canvas again.
+      await storeBytes(fileId, opts.filename, bytes);
       return parseFile(bytes, opts.kind);
     },
   };
@@ -90,17 +106,17 @@ export function stageCanvasFile(opts: {
 /**
  * Canvas rich text — a syllabus body, an assignment description, a module
  * outline. There's no file behind it, so it gets a file row with kind 'html'
- * and nothing on disk; `label` is what its citations will say.
+ * and nothing in Blob; `label` is what its citations will say.
  */
-export function stageCanvasText(opts: {
+export async function stageCanvasText(opts: {
   lessonId: string;
   filename: string;
   label: string;
   html: string;
   canvasFileId: string;
   canvasUpdatedAt: string | null;
-}): Pending {
-  const fileId = createFile(opts.lessonId, opts.filename, "html", {
+}): Promise<Pending> {
+  const fileId = await createFile(opts.lessonId, opts.filename, "html", {
     fileId: opts.canvasFileId,
     updatedAt: opts.canvasUpdatedAt,
   });
@@ -115,13 +131,19 @@ export async function processPending(
   for (const { fileId, parse } of pending) {
     try {
       const chunks = await parse();
-      insertChunks(lessonId, fileId, chunks);
-      setFileStatus(fileId, "ready", { chunkCount: chunks.length });
+      await insertChunks(lessonId, fileId, chunks);
+      await setFileStatus(fileId, "ready", { chunkCount: chunks.length });
     } catch (error) {
       // A bad file shouldn't take down the others or the request.
-      setFileStatus(fileId, "failed", {
+      await setFileStatus(fileId, "failed", {
         error: error instanceof Error ? error.message : "Could not read this file.",
       });
     }
   }
+}
+
+/** Deletes a lesson's file bytes from Blob. Silently ignores missing ones. */
+export async function deleteBlobs(urls: string[]): Promise<void> {
+  if (urls.length === 0 || !process.env.BLOB_READ_WRITE_TOKEN) return;
+  await del(urls);
 }

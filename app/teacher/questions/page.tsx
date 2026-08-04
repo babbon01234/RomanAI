@@ -27,8 +27,8 @@ export default async function TeacherQuestionsPage({
   searchParams: Promise<{ show?: string }>;
 }) {
   const onlyFlagged = (await searchParams).show === "attention";
-  const messages = listMessages(100, onlyFlagged ? "needs_human" : undefined);
-  const waiting = countNeedsHuman();
+  const messages = await listMessages(100, onlyFlagged ? "needs_human" : undefined);
+  const waiting = await countNeedsHuman();
 
   return (
     <>

@@ -27,11 +27,11 @@ function refresh() {
 export async function promoteToFaq(messageId: string) {
   await assertTeacher();
 
-  const message = getMessage(messageId);
+  const message = await getMessage(messageId);
   if (!message) throw new Error("No such question.");
 
-  const faqId = createFaq(message.lesson_id, message.question, message.answer);
-  markMessagePromoted(messageId, faqId);
+  const faqId = await createFaq(message.lesson_id, message.question, message.answer);
+  await markMessagePromoted(messageId, faqId);
   refresh();
 }
 
@@ -42,12 +42,12 @@ export async function saveFaq(formData: FormData) {
   const question = String(formData.get("question") ?? "").trim();
   const answer = String(formData.get("answer") ?? "").trim();
 
-  if (id && question && answer) updateFaq(id, question, answer);
+  if (id && question && answer) await updateFaq(id, question, answer);
   refresh();
 }
 
 export async function removeFaq(formData: FormData) {
   await assertTeacher();
-  deleteFaq(String(formData.get("id") ?? ""));
+  await deleteFaq(String(formData.get("id") ?? ""));
   refresh();
 }

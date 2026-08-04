@@ -13,6 +13,8 @@ export default async function TeacherLayout({
 }) {
   if ((await getRole()) !== "teacher") redirect("/");
 
+  const pending = await countPendingChunks();
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       {/* Navy chrome: this is the "desk" side of the product. */}
@@ -22,7 +24,7 @@ export default async function TeacherLayout({
             Office Hours
           </Link>
 
-          <TeacherNav pending={countPendingChunks()} />
+          <TeacherNav pending={pending} />
 
           <form action={signOut} className="ml-auto">
             <button

@@ -18,7 +18,7 @@ export default async function StudentChatPage() {
   const name = await getStudentName();
   if (!name) redirect("/student");
 
-  const lessons = listLessons();
+  const lessons = await listLessons();
 
   // Rehydrate this student's own history from the question log, so a refresh
   // (or picking the phone back up) doesn't lose the conversation.
@@ -26,22 +26,23 @@ export default async function StudentChatPage() {
   for (const lesson of lessons) {
     if (lesson.approved_count === 0) continue;
 
-    history[lesson.id] = listMessagesForStudent(lesson.id, name).map(
-      (message) => {
-        const citations = JSON.parse(message.citations_json) as Citation[];
-        return {
-          key: message.id,
-          question: message.question,
-          answer: message.answer,
-          citations,
-          found: message.source === "faq" || citations.length > 0,
-          source: message.source,
-          handedOff: message.outcome === "needs_human",
-          restored: true,
-        };
-      },
-    );
+    const messages = await listMessagesForStudent(lesson.id, name);
+    history[lesson.id] = messages.map((message) => {
+      const citations = JSON.parse(message.citations_json) as Citation[];
+      return {
+        key: message.id,
+        question: message.question,
+        answer: message.answer,
+        citations,
+        found: message.source === "faq" || citations.length > 0,
+        source: message.source,
+        handedOff: message.outcome === "needs_human",
+        restored: true,
+      };
+    });
   }
+
+  const faqs = await listAllFaqs();
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -65,7 +66,7 @@ export default async function StudentChatPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-12 pt-7">
         <ChatShell
           lessons={lessons}
-          faqs={listAllFaqs()}
+          faqs={faqs}
           history={history}
           rehearsal={activeProvider() === "rehearsal"}
         />

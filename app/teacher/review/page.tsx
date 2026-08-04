@@ -21,7 +21,7 @@ export default async function ReviewPage({
   searchParams: Promise<{ lesson?: string; show?: string }>;
 }) {
   const params = await searchParams;
-  const lessons = listLessons().filter((l) => l.chunk_count > 0);
+  const lessons = (await listLessons()).filter((l) => l.chunk_count > 0);
 
   // Land on whatever most needs a person: the first lesson with something
   // pending, rather than the newest lesson which may be fully reviewed.
@@ -35,7 +35,7 @@ export default async function ReviewPage({
     : "pending";
 
   const chunks = selected
-    ? listChunksForReview(
+    ? await listChunksForReview(
         selected.id,
         show === "all" ? undefined : (show as ApprovalStatus),
       )

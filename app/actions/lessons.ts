@@ -1,10 +1,9 @@
 "use server";
 
-import fs from "node:fs/promises";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createLesson, deleteLesson, listFiles } from "@/lib/db/queries";
-import { processPending, stageUpload, uploadPath } from "@/lib/processing";
+import { deleteBlobs, processPending, stageUpload } from "@/lib/processing";
 import { getRole } from "@/lib/session";
 
 export interface LessonFormState {
@@ -26,7 +25,7 @@ export async function createLessonAction(
   if (!title) return { error: "Give the lesson a title." };
   if (files.length === 0) return { error: "Add at least one file." };
 
-  const lessonId = createLesson(title, description);
+  const lessonId = await createLesson(title, description);
 
   const pending = [];
   try {
@@ -47,8 +46,8 @@ export async function createLessonAction(
 }
 
 /**
- * Removes the lesson, everything cascading from it, and the uploaded files on
- * disk. Destructive and not undoable — the UI asks first.
+ * Removes the lesson, everything cascading from it, and the uploaded files in
+ * Blob storage. Destructive and not undoable — the UI asks first.
  */
 export async function deleteLessonAction(formData: FormData) {
   if ((await getRole()) !== "teacher") throw new Error("Teachers only.");
@@ -57,17 +56,13 @@ export async function deleteLessonAction(formData: FormData) {
   if (!lessonId) return;
 
   // Read the file list before the cascade removes the rows.
-  const files = listFiles(lessonId);
-  deleteLesson(lessonId);
+  const files = await listFiles(lessonId);
+  await deleteLesson(lessonId);
 
-  for (const file of files) {
-    // Canvas rich text has a row but nothing on disk.
-    if (file.kind === "html") continue;
-    // A missing upload shouldn't fail the delete the teacher already asked for.
-    await fs
-      .rm(uploadPath(file.id, file.filename), { force: true })
-      .catch(() => {});
-  }
+  const blobUrls = files
+    .map((f) => f.blob_url)
+    .filter((url): url is string => Boolean(url));
+  await deleteBlobs(blobUrls);
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/questions");

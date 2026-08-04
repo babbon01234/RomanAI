@@ -10,5 +10,5 @@ export async function GET() {
   if (!(await getRole())) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  return NextResponse.json({ lessons: listLessons() });
+  return NextResponse.json({ lessons: await listLessons() });
 }

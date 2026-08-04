@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const lesson = getLesson(lessonId);
+  const lesson = await getLesson(lessonId);
   if (!lesson) {
     return NextResponse.json({ error: "No such lesson." }, { status: 404 });
   }
@@ -56,9 +56,9 @@ export async function POST(request: Request) {
   // FAQ first, and before triage too. If a teacher has written an answer to
   // "can I get an extension", their words outrank our redirect — they've
   // already made the call this would otherwise hand back to them.
-  const faq = matchFaq(question, listFaqs(lessonId));
+  const faq = matchFaq(question, await listFaqs(lessonId));
   if (faq) {
-    const id = logMessage({
+    const id = await logMessage({
       lessonId,
       studentName,
       question,
@@ -96,11 +96,11 @@ export async function POST(request: Request) {
         ? " If you just want to know where the points went, the “Why did I lose points on this?” button below shows your teacher's own rubric notes."
         : "";
 
-    return handOff(lessonId, studentName, question, triage.reason, undefined, extra);
+    return await handOff(lessonId, studentName, question, triage.reason, undefined, extra);
   }
 
-  const { chunks } = selectChunks(lessonId, question);
-  const filenames = new Map(listFiles(lessonId).map((f) => [f.id, f.filename]));
+  const { chunks } = await selectChunks(lessonId, question);
+  const filenames = new Map((await listFiles(lessonId)).map((f) => [f.id, f.filename]));
 
   let answer;
   try {
@@ -122,18 +122,18 @@ export async function POST(request: Request) {
   // text is discarded rather than shown — if this is a question for a person,
   // whatever it wrote isn't ours to pass on.
   if (answer.needsHuman) {
-    return handOff(lessonId, studentName, question, "subjective");
+    return await handOff(lessonId, studentName, question, "subjective");
   }
 
   // Material that doesn't cover the question is also a question for a person.
   // The student sees the same wording as before; what changed is that the
   // teacher now sees it in their log as something waiting on them.
   if (!answer.found) {
-    return handOff(lessonId, studentName, question, "not-covered", answer.provider);
+    return await handOff(lessonId, studentName, question, "not-covered", answer.provider);
   }
 
   // Log every exchange — this is the teacher's window into what's being asked.
-  const id = logMessage({
+  const id = await logMessage({
     lessonId,
     studentName,
     question,
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
  * Hand the question back. Nothing is generated, nothing is cited, and the log
  * entry carries the reason so the teacher can scan for what needs them.
  */
-function handOff(
+async function handOff(
   lessonId: string,
   studentName: string,
   question: string,
@@ -167,10 +167,10 @@ function handOff(
   provider = activeProvider(),
   /** Appended to the standard redirect when there's somewhere else to point. */
   extra = "",
-): NextResponse {
+): Promise<NextResponse> {
   const answer = REDIRECTS[reason] + extra;
 
-  const id = logMessage({
+  const id = await logMessage({
     lessonId,
     studentName,
     question,

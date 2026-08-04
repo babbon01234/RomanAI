@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Expected a JSON body." }, { status: 400 });
   }
 
-  const lesson = lessonId ? getLesson(lessonId) : undefined;
+  const lesson = lessonId ? await getLesson(lessonId) : undefined;
   if (!lesson) {
     return NextResponse.json({ error: "No such lesson." }, { status: 404 });
   }
@@ -103,12 +103,12 @@ export async function POST(request: Request) {
     const result = buildBreakdown(assignment, submission);
 
     if ("notGraded" in result) {
-      return handOff(lessonId, studentName, result.notGraded);
+      return await handOff(lessonId, studentName, result.notGraded);
     }
 
     const explanation = await explainGrade(result.breakdown);
 
-    const id = logMessage({
+    const id = await logMessage({
       lessonId,
       studentName,
       question: ASKED,
@@ -140,14 +140,14 @@ export async function POST(request: Request) {
  * in their log — a student asking about an ungraded assignment is worth
  * knowing about.
  */
-function handOff(
+async function handOff(
   lessonId: string,
   studentName: string,
   reason: NotGradedReason,
-): NextResponse {
+): Promise<NextResponse> {
   const answer = NOT_GRADED_MESSAGES[reason];
 
-  const id = logMessage({
+  const id = await logMessage({
     lessonId,
     studentName,
     question: ASKED,

@@ -4,8 +4,8 @@ import { listLessons } from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
 
-export default function TeacherLessonsPage() {
-  const lessons = listLessons();
+export default async function TeacherLessonsPage() {
+  const lessons = await listLessons();
 
   return (
     <>

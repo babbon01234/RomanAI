@@ -40,7 +40,7 @@ async function loadCourses(): Promise<Listing> {
   try {
     const courses = await CanvasClient.fromEnv().listCourses();
     const synced = new Map(
-      listSyncedCourses().map((row) => [row.canvas_course_id, row]),
+      (await listSyncedCourses()).map((row) => [row.canvas_course_id, row]),
     );
 
     return {
