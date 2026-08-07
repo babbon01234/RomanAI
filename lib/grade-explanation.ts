@@ -1,6 +1,6 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { activeProvider, type Provider } from "@/lib/answer";
+import { jsonSchemaFormat, modelClient, modelName } from "@/lib/model";
 import {
   GRADE_SCHEMA,
   GRADE_SYSTEM_PROMPT,
@@ -17,8 +17,6 @@ import type { Citation } from "@/lib/types";
  * it is *incapable* of adding anything, which makes it a useful check on what
  * the model path is supposed to be doing.
  */
-
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 export interface GradeExplanation {
   text: string;
@@ -52,8 +50,8 @@ export async function explainGrade(
   const citations = breakdown.criteria.map((c) => cite(c, breakdown.assignmentName));
 
   const text =
-    provider === "anthropic"
-      ? await askClaude(breakdown)
+    provider === "model"
+      ? await askModel(breakdown)
       : restate(breakdown);
 
   return { text, citations, provider };
@@ -61,20 +59,13 @@ export async function explainGrade(
 
 /* ------------------------------- real call ------------------------------- */
 
-async function askClaude(breakdown: GradeBreakdown): Promise<string> {
-  const client = new Anthropic();
-
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    system: GRADE_SYSTEM_PROMPT,
-    // Restating structured data, not reasoning about it.
-    thinking: { type: "disabled" },
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: GRADE_SCHEMA },
-    },
+async function askModel(breakdown: GradeBreakdown): Promise<string> {
+  const response = await modelClient().chat.completions.create({
+    model: modelName(),
+    max_completion_tokens: 1024,
+    response_format: jsonSchemaFormat("grade_explanation", GRADE_SCHEMA),
     messages: [
+      { role: "system", content: GRADE_SYSTEM_PROMPT },
       {
         role: "user",
         content: buildGradeMessage({
@@ -94,14 +85,16 @@ async function askClaude(breakdown: GradeBreakdown): Promise<string> {
     ],
   });
 
+  const choice = response.choices[0];
+
   // A refusal or a truncation both mean we have no trustworthy restatement.
   // Falling back to the template is better than showing a partial one: the
   // template can only contain the teacher's own words.
-  if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens") {
+  if (choice?.message.refusal || choice?.finish_reason === "length") {
     return restate(breakdown);
   }
 
-  const raw = response.content.find((b) => b.type === "text")?.text ?? "";
+  const raw = choice?.message.content ?? "";
   try {
     const parsed = JSON.parse(raw) as { explanation: string };
     return parsed.explanation.trim() || restate(breakdown);

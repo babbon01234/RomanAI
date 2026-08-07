@@ -24,7 +24,7 @@ export interface ChatResponse {
   /** "needs_human" means nothing was generated — the student was sent on. */
   outcome: Outcome;
   humanReason: HumanReason | null;
-  provider: "anthropic" | "rehearsal";
+  provider: "model" | "rehearsal";
 }
 
 export async function POST(request: Request) {

@@ -36,7 +36,7 @@ export interface GradeResponse {
   answer: string;
   citations: Citation[];
   graded: boolean;
-  provider: "anthropic" | "rehearsal";
+  provider: "model" | "rehearsal";
 }
 
 export async function POST(request: Request) {

@@ -15,6 +15,7 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -187,7 +188,7 @@ function startCanvas() {
 /**
  * A throwaway database, a stub Canvas, and no API key. Values set here win
  * over .env.local — @next/env only fills in variables that aren't already in
- * the environment — so the real Anthropic key stays out and the answer layer
+ * the environment — so the real model key stays out and the answer layer
  * runs in its rehearsal mode, which is what makes the citation assertions
  * deterministic.
  */
@@ -198,7 +199,7 @@ const APP_ENV = {
   CANVAS_ACCESS_TOKEN: "sandbox-token-123",
   // Priya is graded, Alex isn't, Sam is deliberately unmapped.
   CANVAS_STUDENT_IDS: "Priya:10421,Alex:10422",
-  ANTHROPIC_API_KEY: "",
+  AI_API_KEY: "",
 };
 
 /**
@@ -251,14 +252,14 @@ async function waitForApp() {
 
 /* ---------------------------------- drive --------------------------------- */
 
-const as = (role, student) =>
-  `oh_role=${role}` + (student ? `; oh_student=${student}` : "");
-
 /**
- * Opens the app's own database to stand in for a teacher working the review
- * queue. Same file, so the running server sees the decisions immediately.
+ * Opens the app's own database — same file the running server reads, so
+ * writes here are visible to it immediately. Used both to stand in for a
+ * teacher working the review queue, and (below) to seed Phase 9 accounts
+ * directly rather than drive the real signup form for a whole cast of
+ * students on every run.
  */
-function review(work) {
+function withDb(work) {
   const Database = createRequire(import.meta.url)("better-sqlite3");
   const db = new Database(APP_ENV.OFFICE_HOURS_DB);
   try {
@@ -266,6 +267,61 @@ function review(work) {
   } finally {
     db.close();
   }
+}
+const review = withDb;
+
+/**
+ * A real account + session per identity, seeded straight into the database
+ * (bypassing signup/Google) so the script can authenticate as a stable cast
+ * of students and one teacher. Creates `users`/`sessions` itself rather than
+ * relying on the app having touched the database first — this can run
+ * before the very first HTTP request.
+ */
+const identityCache = new Map();
+function as(role, name) {
+  const key = `${role}:${name ?? ""}`;
+  if (identityCache.has(key)) return identityCache.get(key);
+
+  const cookie = withDb((db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+        role TEXT NOT NULL, password_hash TEXT, google_id TEXT UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL
+      );
+    `);
+
+    const email = `${(name ?? role).toLowerCase()}@example.test`;
+    let user = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (!user) {
+      const id = randomUUID();
+      db.prepare("INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)").run(
+        id,
+        email,
+        name ?? "Ms. Rivera",
+        role,
+      );
+      user = { id };
+    }
+
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(
+      token,
+      user.id,
+      expiresAt,
+    );
+
+    return `oh_session=${token}`;
+  });
+
+  identityCache.set(key, cookie);
+  return cookie;
 }
 
 /** A rendered page's visible text, with markup and entities resolved. */

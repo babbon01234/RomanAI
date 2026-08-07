@@ -1,5 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import { isModelConfigured, jsonSchemaFormat, modelClient, modelName } from "@/lib/model";
 import {
   ANSWER_SCHEMA,
   NOT_IN_MATERIALS,
@@ -12,14 +12,14 @@ import type { Chunk, Citation } from "@/lib/types";
 /**
  * One seam for producing an answer, with two implementations behind it.
  *
- * "anthropic" is the real grounded call. "rehearsal" runs when no API key is
+ * "model" is the real grounded call. "rehearsal" runs when no API key is
  * set: retrieval, citations, and the not-in-materials path are all genuine —
  * only the answer prose is extracted rather than written. It exists so the
  * whole loop is buildable and demoable without spending anything, and the UI
  * labels it so nobody mistakes it for the model.
  */
 
-export type Provider = "anthropic" | "rehearsal";
+export type Provider = "model" | "rehearsal";
 
 export interface Answer {
   text: string;
@@ -35,10 +35,8 @@ export interface Answer {
   provider: Provider;
 }
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-
 export function activeProvider(): Provider {
-  return process.env.ANTHROPIC_API_KEY?.trim() ? "anthropic" : "rehearsal";
+  return isModelConfigured() ? "model" : "rehearsal";
 }
 
 function cite(chunk: Chunk, lessonTitle: string, filename: string): Citation {
@@ -66,14 +64,14 @@ export async function answerQuestion(opts: {
 
   const nameOf = (chunk: Chunk) => filenames.get(chunk.file_id) ?? "";
 
-  return provider === "anthropic"
-    ? askClaude({ question, lessonTitle, chunks, nameOf })
+  return provider === "model"
+    ? askModel({ question, lessonTitle, chunks, nameOf })
     : rehearse({ question, lessonTitle, chunks, nameOf });
 }
 
 /* ------------------------------- real call ------------------------------ */
 
-async function askClaude({
+async function askModel({
   question,
   lessonTitle,
   chunks,
@@ -84,41 +82,38 @@ async function askClaude({
   chunks: Chunk[];
   nameOf: (c: Chunk) => string;
 }): Promise<Answer> {
-  const client = new Anthropic();
-
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    // This is grounded extraction, not reasoning — thinking would add latency
-    // a student waiting on a chat reply would feel, for no accuracy gain.
-    thinking: { type: "disabled" },
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: ANSWER_SCHEMA },
-    },
+  const response = await modelClient().chat.completions.create({
+    model: modelName(),
+    max_completion_tokens: 1024,
+    response_format: jsonSchemaFormat("answer", ANSWER_SCHEMA),
     messages: [
+      { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: buildUserMessage(lessonTitle, chunks, question) },
     ],
   });
 
-  if (response.stop_reason === "refusal") {
+  const choice = response.choices[0];
+
+  // A refusal is the model declining to answer at all. Treating it as
+  // "not in the materials" is the honest reading: we have no grounded answer,
+  // and inventing a different message would imply we know why.
+  if (choice?.message.refusal) {
     return {
       text: NOT_IN_MATERIALS,
       citations: [],
       found: false,
       needsHuman: false,
-      provider: "anthropic",
+      provider: "model",
     };
   }
 
   // A truncated response would be unparseable JSON; 1024 tokens is far more
   // than a two-sentence answer needs, so this means something else went wrong.
-  if (response.stop_reason === "max_tokens") {
+  if (choice?.finish_reason === "length") {
     throw new Error("Answer was cut off before it finished.");
   }
 
-  const text = response.content.find((b) => b.type === "text")?.text ?? "";
+  const text = choice?.message.content ?? "";
   const parsed = JSON.parse(text) as {
     answer: string;
     found: boolean;
@@ -140,7 +135,7 @@ async function askClaude({
     citations,
     found: parsed.found && citations.length > 0,
     needsHuman: Boolean(parsed.needs_human),
-    provider: "anthropic",
+    provider: "model",
   };
 }
 

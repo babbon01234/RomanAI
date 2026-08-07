@@ -61,8 +61,15 @@ instead of proceeding — it means scope has drifted.
 - Tailwind CSS
 - SQLite via `better-sqlite3` for local storage (lessons, chunks, chat logs,
   FAQ entries)
-- Anthropic SDK (`@anthropic-ai/sdk`) for the chat model — use
-  `claude-sonnet-5`
+- `openai` SDK pointed at an OpenAI-compatible gateway for the chat model.
+  Phase 10 moved off `@anthropic-ai/sdk`: the key we have is a Hack Club AI
+  gateway key, and that gateway speaks the OpenAI wire format only — the
+  Anthropic `/v1/messages` protocol answers 401 there, so the Anthropic SDK
+  could not reach it whatever the base URL. The gateway fronts many
+  providers, so the model is config (`AI_MODEL`), not a code decision:
+  `~openai/gpt-mini-latest` is the current default and
+  `anthropic/claude-sonnet-5` works on the same key. All of it lives behind
+  `lib/model.ts` — nothing else constructs a client.
 - Canvas REST API via `fetch` — no SDK. Domain and token come from
   `CANVAS_BASE_URL` / `CANVAS_ACCESS_TOKEN`.
 - File parsing:

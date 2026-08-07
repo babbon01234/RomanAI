@@ -34,9 +34,15 @@ screen. It exists so the whole loop is demoable without spending anything.
 For real answers, put a key in `.env.local`:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-5
+AI_API_KEY=sk-hc-v1-...
+AI_BASE_URL=https://ai.hackclub.com/proxy/v1
+AI_MODEL=~openai/gpt-mini-latest
 ```
+
+The model is reached over an OpenAI-compatible API, so any gateway speaking
+that format works; `AI_MODEL` is a plain string the gateway resolves, so
+switching to `anthropic/claude-sonnet-5` is a one-line edit. Only
+`AI_API_KEY` is required — the other two have defaults (`lib/model.ts`).
 
 Nothing else changes — `lib/answer.ts` picks the path at request time.
 
