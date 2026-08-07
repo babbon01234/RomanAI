@@ -1,3 +1,15 @@
+export type Role = "teacher" | "student";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  password_hash: string | null;
+  google_id: string | null;
+  created_at: string;
+}
+
 /** "html" is Canvas rich text — a syllabus body or assignment description. */
 export type FileKind = "pdf" | "docx" | "pptx" | "html";
 export type FileStatus = "processing" | "ready" | "failed";
@@ -104,6 +116,3 @@ export interface LessonSummary extends Lesson {
   /** Why the first failing file failed, if any did. */
   error: string | null;
 }
-
-export const STUDENT_NAMES = ["Alex", "Jordan", "Sam", "Priya", "Marcus"];
-export const TEACHER_NAME = "Ms. Rivera";

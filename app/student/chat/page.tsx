@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/actions/session";
+import { signOut } from "@/app/actions/auth";
 import { ChatShell, type Exchange } from "@/components/student/ChatShell";
 import { activeProvider } from "@/lib/answer";
 import {
@@ -16,7 +16,7 @@ export default async function StudentChatPage() {
   if ((await getRole()) !== "student") redirect("/");
 
   const name = await getStudentName();
-  if (!name) redirect("/student");
+  if (!name) redirect("/");
 
   const lessons = await listLessons();
 
@@ -57,7 +57,7 @@ export default async function StudentChatPage() {
             >
               {name}
               <span className="mx-1.5 text-charcoal-muted/40">&middot;</span>
-              Not you?
+              Sign out
             </button>
           </form>
         </div>

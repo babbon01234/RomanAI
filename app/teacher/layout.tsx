@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/actions/session";
+import { signOut } from "@/app/actions/auth";
 import { countPendingChunks } from "@/lib/db/queries";
-import { getRole } from "@/lib/session";
-import { TEACHER_NAME } from "@/lib/types";
+import { getRole, getUserName } from "@/lib/session";
 import { TeacherNav } from "@/components/teacher/TeacherNav";
 
 export default async function TeacherLayout({
@@ -13,6 +12,7 @@ export default async function TeacherLayout({
 }) {
   if ((await getRole()) !== "teacher") redirect("/");
 
+  const teacherName = await getUserName();
   const pending = await countPendingChunks();
 
   return (
@@ -31,7 +31,7 @@ export default async function TeacherLayout({
               type="submit"
               className="cursor-pointer text-[12px] text-parchment/60 transition-colors hover:text-parchment"
             >
-              {TEACHER_NAME}
+              {teacherName}
               <span className="mx-1.5 text-parchment/35">&middot;</span>
               Sign out
             </button>

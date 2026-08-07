@@ -100,3 +100,27 @@ CREATE INDEX IF NOT EXISTS idx_messages_lesson ON messages(lesson_id);
 -- The teacher's "what needs me" filter.
 CREATE INDEX IF NOT EXISTS idx_messages_outcome
   ON messages(outcome, created_at DESC);
+
+-- Phase 9: real accounts. A user is either password-based (password_hash set,
+-- google_id NULL) or Google-based (google_id set, password_hash NULL) — never
+-- neither, enforced in lib/auth, not here.
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  role          TEXT NOT NULL,        -- teacher | student
+  password_hash TEXT,
+  google_id     TEXT UNIQUE,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A row per signed-in session, keyed by the opaque token stored in the
+-- session cookie. DB-backed rather than a signed JWT so sign-out actually
+-- revokes access instead of just deleting a client-side copy.
+CREATE TABLE IF NOT EXISTS sessions (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);

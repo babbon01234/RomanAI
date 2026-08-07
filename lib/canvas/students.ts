@@ -1,13 +1,10 @@
-import { STUDENT_NAMES } from "@/lib/types";
-
 /**
- * Which Canvas user each fake student stands for.
+ * Which Canvas user each real student account stands for.
  *
- * Phase 1's students are names in a cookie with no identity behind them, and
- * that stays true — this is a lookup table for the sandbox, configured as
- * `CANVAS_STUDENT_IDS="Priya:12345,Alex:67890"`, not an account system.
- * Anyone not listed simply has no Canvas submission to look at, which is the
- * right answer for a name nobody mapped.
+ * Phase 9 gave students real accounts, but Canvas has no idea those accounts
+ * exist — this is a lookup table for the sandbox, configured as
+ * `CANVAS_STUDENT_IDS="Priya Patel:12345,Alex Chen:67890"`, not a sync. A
+ * student whose name isn't listed simply has no Canvas submission to look at.
  *
  * It lives in the environment rather than the database because it is deploy
  * configuration for a sandbox, and because a mapping of real names to student
@@ -27,17 +24,11 @@ export function studentCanvasIds(): Map<string, string> {
         parts.length === 2 && Boolean(parts[0]) && /^\d+$/.test(parts[1]),
     );
 
-  // Only names from the known roster, matched case-insensitively so the env
-  // var doesn't have to get the capitalisation exactly right.
-  const canonical = new Map(STUDENT_NAMES.map((n) => [n.toLowerCase(), n]));
-
-  return new Map(
-    pairs
-      .map(([name, id]) => [canonical.get(name.toLowerCase()), id] as const)
-      .filter((entry): entry is [string, string] => entry[0] !== undefined),
-  );
+  // Matched case-insensitively so the env var doesn't have to get a
+  // student's capitalisation exactly right.
+  return new Map(pairs.map(([name, id]) => [name.toLowerCase(), id]));
 }
 
 export function canvasIdFor(studentName: string): string | null {
-  return studentCanvasIds().get(studentName) ?? null;
+  return studentCanvasIds().get(studentName.toLowerCase()) ?? null;
 }

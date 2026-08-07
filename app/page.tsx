@@ -1,120 +1,94 @@
-import { continueAsStudent, continueAsTeacher } from "@/app/actions/session";
+import Link from "next/link";
+import { signInWithPassword } from "@/app/actions/auth";
+import { ErrorBanner, FIELD, FormField } from "@/components/auth/FormField";
+import { isGoogleConfigured } from "@/lib/auth/google";
 
-export default function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const error = (await searchParams).error;
+
   return (
     <main className="flex flex-1 items-center justify-center px-5 py-14 sm:py-20">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-sm">
         <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-charcoal-muted">
           Office Hours
         </p>
 
-        <h1 className="mt-4 max-w-xl text-4xl leading-[1.08] tracking-[-0.015em] sm:text-5xl">
-          Ask about the lesson.
-          <br />
-          Get the source with it.
+        <h1 className="mt-4 text-4xl leading-[1.08] tracking-[-0.015em] sm:text-5xl">
+          Sign in.
         </h1>
 
-        <p className="mt-5 max-w-md text-[15px] leading-relaxed text-charcoal-muted">
+        <p className="mt-5 text-[15px] leading-relaxed text-charcoal-muted">
           Every answer comes from your teacher&rsquo;s own materials, with the
           slide or page it came from.
         </p>
 
-        <div className="mt-11 grid gap-4 sm:grid-cols-2">
-          <RoleCard
-            action={continueAsTeacher}
-            variant="teacher"
-            label="I’m teaching"
-            blurb="Add lessons, see what students are asking, save the answers worth keeping."
-          />
-          <RoleCard
-            action={continueAsStudent}
-            variant="student"
-            label="I’m a student"
-            blurb="Pick a lesson and ask. Every answer shows where it came from."
-          />
+        <div className="mt-9 rounded-xl border border-parchment-line bg-white/70 p-6 shadow-[0_10px_24px_-20px_rgba(27,42,74,.5)]">
+          {isGoogleConfigured() && (
+            <>
+              <a
+                href="/api/auth/google"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-parchment-line bg-white px-4 py-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-gold hover:bg-gold-wash"
+              >
+                Continue with Google
+              </a>
+
+              <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-charcoal-muted/70">
+                <span className="h-px flex-1 bg-parchment-line" />
+                or
+                <span className="h-px flex-1 bg-parchment-line" />
+              </div>
+            </>
+          )}
+
+          <form action={signInWithPassword} className="space-y-4">
+            <ErrorBanner message={error} />
+
+            <FormField label="Email">
+              <input
+                type="email"
+                name="email"
+                required
+                autoComplete="email"
+                placeholder="you@school.edu"
+                className={FIELD}
+              />
+            </FormField>
+
+            <FormField label="Password">
+              <input
+                type="password"
+                name="password"
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                className={FIELD}
+              />
+            </FormField>
+
+            <button
+              type="submit"
+              className="w-full cursor-pointer rounded-lg bg-ink px-5 py-2.5 text-[13px] font-medium text-parchment transition-colors duration-150 hover:bg-ink/90"
+            >
+              Sign in
+            </button>
+          </form>
         </div>
 
+        <p className="mt-6 text-[13px] text-charcoal-muted">
+          New here?{" "}
+          <Link href="/signup" className="font-medium text-ink underline underline-offset-2">
+            Create an account
+          </Link>
+        </p>
+
         <p className="mt-10 text-xs text-charcoal-muted/80">
-          Demo build. No passwords, no real student data.
+          Demo build. Sandbox data only — never a real school&rsquo;s.
         </p>
       </div>
     </main>
-  );
-}
-
-function RoleCard({
-  action,
-  variant,
-  label,
-  blurb,
-}: {
-  action: () => Promise<void>;
-  variant: "teacher" | "student";
-  label: string;
-  blurb: string;
-}) {
-  const teacher = variant === "teacher";
-
-  return (
-    <form action={action} className="contents">
-      <button
-        type="submit"
-        className={
-          "group relative flex min-h-[172px] cursor-pointer flex-col items-start rounded-xl p-6 text-left transition duration-200 ease-[var(--ease-quiet)] hover:-translate-y-0.5 active:translate-y-0 " +
-          (teacher
-            ? "bg-ink text-parchment shadow-[0_10px_24px_-16px_rgba(27,42,74,.65)] hover:shadow-[0_16px_32px_-16px_rgba(27,42,74,.7)]"
-            : "border border-parchment-line bg-white/70 shadow-[0_10px_24px_-20px_rgba(27,42,74,.5)] hover:border-gold hover:shadow-[0_16px_30px_-20px_rgba(27,42,74,.5)]")
-        }
-      >
-        {/* Quiet motif: stacked index cards for the teacher, ruled paper for
-            the student — enough to tell the two worlds apart at a glance. */}
-        <span
-          aria-hidden
-          className={
-            "pointer-events-none absolute right-6 top-6 h-9 w-9 rounded-[3px] " +
-            (teacher
-              ? "border border-parchment/25 bg-parchment/10 shadow-[5px_-5px_0_-1px_var(--color-ink),5px_-5px_0_rgba(250,246,237,.22)]"
-              : "border border-parchment-line bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_5px,var(--color-parchment-line)_5px,var(--color-parchment-line)_6px)]")
-          }
-        />
-
-        <span
-          className={
-            "mt-auto font-display text-2xl " +
-            (teacher ? "text-parchment" : "text-ink")
-          }
-        >
-          {label}
-        </span>
-
-        <span
-          className={
-            "mt-2 max-w-[26ch] text-[13px] leading-relaxed " +
-            (teacher ? "text-parchment/70" : "text-charcoal-muted")
-          }
-        >
-          {blurb}
-        </span>
-
-        <span
-          aria-hidden
-          className={
-            "mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition-[gap] duration-200 group-hover:gap-2.5 " +
-            (teacher ? "text-gold" : "text-gold-deep")
-          }
-        >
-          Continue
-          <svg width="14" height="8" viewBox="0 0 14 8" fill="none">
-            <path
-              d="M0 4h12M9 1l3 3-3 3"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </span>
-      </button>
-    </form>
   );
 }

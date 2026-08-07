@@ -1,15 +1,76 @@
 import { chromium } from "playwright";
 
+import { createRequire } from "node:module";
+import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
 const OUT = path.join(import.meta.dirname, "fixtures");
 const BASE = process.env.BASE_URL ?? "http://localhost:5880";
+const DB_FILE =
+  process.env.OFFICE_HOURS_DB ?? path.join(import.meta.dirname, "..", "data", "app.db");
 const browser = await chromium.launch({ channel: "chrome" });
 
 const ok = (label, cond) => {
   console.log(`${cond ? "  ok  " : "  FAIL"} ${label}`);
   if (!cond) process.exitCode = 1;
 };
+
+/**
+ * A real account + session per identity, seeded straight into the app's own
+ * database rather than driving the signup form for a whole cast of students
+ * on every run. Creates `users`/`sessions` itself so it works even if the
+ * running server hasn't touched the database yet.
+ */
+const identityCache = new Map();
+function sessionCookie(role, name) {
+  const key = `${role}:${name ?? ""}`;
+  if (identityCache.has(key)) return identityCache.get(key);
+
+  const Database = createRequire(import.meta.url)("better-sqlite3");
+  const db = new Database(DB_FILE);
+  let token;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+        role TEXT NOT NULL, password_hash TEXT, google_id TEXT UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL
+      );
+    `);
+
+    const email = `${(name ?? role).toLowerCase()}@example.test`;
+    let user = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (!user) {
+      const id = randomUUID();
+      db.prepare("INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)").run(
+        id,
+        email,
+        name ?? "Ms. Rivera",
+        role,
+      );
+      user = { id };
+    }
+
+    token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(
+      token,
+      user.id,
+      expiresAt,
+    );
+  } finally {
+    db.close();
+  }
+
+  const cookie = [["oh_session", token]];
+  identityCache.set(key, cookie);
+  return cookie;
+}
 
 async function ctxFor(cookies, width = 1280, height = 900) {
   const ctx = await browser.newContext({
@@ -27,7 +88,7 @@ async function ctxFor(cookies, width = 1280, height = 900) {
 // ── 1. Teacher uploads three lessons ────────────────────────────────────────
 console.log("\n1. Teacher uploads lessons");
 {
-  const { ctx, page } = await ctxFor([["oh_role", "teacher"]]);
+  const { ctx, page } = await ctxFor(sessionCookie("teacher"));
   const lessons = [
     ["Unit 3 — Photosynthesis", "Light reactions and the Calvin cycle. Lab report due Friday.", "fixture.pptx"],
     ["Unit 3 — Study Guide", "What's on the exam and what to bring.", "fixture.docx"],
@@ -64,7 +125,7 @@ console.log("\n1. Teacher uploads lessons");
 // ── 2. Teacher works the review queue ───────────────────────────────────────
 console.log("\n2. Teacher approves the content");
 {
-  const { ctx, page } = await ctxFor([["oh_role", "teacher"]], 1280, 1000);
+  const { ctx, page } = await ctxFor(sessionCookie("teacher"), 1280, 1000);
 
   // The page lands on the first lesson with anything pending, so reloading
   // after each bulk approval walks through all three without needing ids.
@@ -106,10 +167,7 @@ const script = [
 ];
 
 for (const [student, lesson, question, want] of script) {
-  const { ctx, page } = await ctxFor([
-    ["oh_role", "student"],
-    ["oh_student", student],
-  ]);
+  const { ctx, page } = await ctxFor(sessionCookie("student", student));
   await page.goto(`${BASE}/student/chat`, { waitUntil: "networkidle" });
   await page.getByRole("tab", { name: lesson }).click();
   await page.fill("textarea", question);
@@ -133,7 +191,7 @@ for (const [student, lesson, question, want] of script) {
 // ── 4. Teacher sees all of it, promotes one ─────────────────────────────────
 console.log("\n4. Teacher question log");
 {
-  const { ctx, page } = await ctxFor([["oh_role", "teacher"]], 1280, 1000);
+  const { ctx, page } = await ctxFor(sessionCookie("teacher"), 1280, 1000);
   await page.goto(`${BASE}/teacher/questions`, { waitUntil: "networkidle" });
 
   const body = await page.innerText("body");
@@ -173,10 +231,7 @@ console.log("\n4. Teacher question log");
 // ── 5. The promoted answer reaches students as a chip ───────────────────────
 console.log("\n5. Promoted FAQ reaches students");
 {
-  const { ctx, page } = await ctxFor([
-    ["oh_role", "student"],
-    ["oh_student", "Sam"],
-  ]);
+  const { ctx, page } = await ctxFor(sessionCookie("student", "Sam"));
   await page.goto(`${BASE}/student/chat`, { waitUntil: "networkidle" });
   await page.getByRole("tab", { name: "Unit 3 — Photosynthesis" }).click();
 
