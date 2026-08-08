@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { signUpWithPassword } from "@/app/actions/auth";
+import { signUpWithPassword, startTeacherGoogleSignup } from "@/app/actions/auth";
 import { ErrorBanner, FIELD, FormField } from "@/components/auth/FormField";
 import { isGoogleConfigured } from "@/lib/auth/google";
+import { teacherSignupOpen } from "@/lib/auth/teacher-code";
 
 export default async function SignupPage({
   searchParams,
@@ -56,6 +57,33 @@ export default async function SignupPage({
   );
 }
 
+/**
+ * Only rendered on the teacher card, and only when a code is actually
+ * required — in local dev with none configured there's nothing to ask for,
+ * and an empty box the user must ignore is worse than no box.
+ */
+function TeacherCodeField() {
+  if (teacherSignupOpen()) return null;
+
+  return (
+    <label className="block">
+      <span className="text-[13px] font-medium text-parchment">Teacher signup code</span>
+      <span className="mt-0.5 block text-[12px] text-parchment/60">
+        Teacher accounts approve content and read the question log, so they
+        aren&rsquo;t open to sign up for.
+      </span>
+      <input
+        type="password"
+        name="teacherCode"
+        required
+        autoComplete="off"
+        aria-label="Teacher signup code"
+        className={`${FIELD} mt-2 border-parchment/25 bg-parchment/10 text-parchment placeholder:text-parchment/40`}
+      />
+    </label>
+  );
+}
+
 function RoleCard({
   variant,
   role,
@@ -92,17 +120,27 @@ function RoleCard({
 
       {isGoogleConfigured() && (
         <>
-          <a
-            href={`/api/auth/google?role=${role}`}
-            className={
-              "mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium transition-colors duration-150 " +
-              (teacher
-                ? "border border-parchment/25 bg-parchment/10 text-parchment hover:bg-parchment/15"
-                : "border border-parchment-line bg-white text-ink hover:border-gold hover:bg-gold-wash")
-            }
-          >
-            Continue with Google
-          </a>
+          {/* The teacher's Google button posts through a server action so the
+              signup code is checked before Google is ever involved; the
+              student's is a plain link, because student signup is open. */}
+          {teacher ? (
+            <form action={startTeacherGoogleSignup} className="mt-5">
+              <TeacherCodeField />
+              <button
+                type="submit"
+                className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-parchment/25 bg-parchment/10 px-4 py-2.5 text-[13px] font-medium text-parchment transition-colors duration-150 hover:bg-parchment/15"
+              >
+                Continue with Google
+              </button>
+            </form>
+          ) : (
+            <a
+              href="/api/auth/google?role=student"
+              className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-parchment-line bg-white px-4 py-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-gold hover:bg-gold-wash"
+            >
+              Continue with Google
+            </a>
+          )}
 
           <div
             className={
@@ -119,6 +157,8 @@ function RoleCard({
 
       <form action={signUpWithPassword} className="space-y-3.5">
         <input type="hidden" name="role" value={role} />
+
+        {teacher && <TeacherCodeField />}
 
         <FormField>
           <input
